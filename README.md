@@ -42,7 +42,8 @@ cd WebApp
 3. Download Tailwind CSS
 
 ```bash
-curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe
+ Invoke-WebRequest -Uri "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe" -OutFile "tailwindcss.exe"
+
 ```
 
 4. Rename the file
