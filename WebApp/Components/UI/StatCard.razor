@@ -1,0 +1,68 @@
+<div class="bg-white rounded-lg shadow p-6 border-l-4 @GetBorderColor()">
+    <div class="flex items-center justify-between">
+        <div class="flex-1">
+            <p class="text-sm font-medium text-gray-600 mb-1">@Title</p>
+            <p class="text-3xl font-bold text-gray-900">@Value</p>
+            @if (!string.IsNullOrEmpty(Trend))
+            {
+                <p class="text-xs text-gray-500 mt-2">@Trend</p>
+            }
+        </div>
+        <div class="@GetIconBgColor() p-3 rounded-lg">
+            @if (Icon == "clock")
+            {
+                <svg class="w-8 h-8 @GetIconColor()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            }
+            else if (Icon == "check-circle")
+            {
+                <svg class="w-8 h-8 @GetIconColor()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            }
+            else if (Icon == "users")
+            {
+                <svg class="w-8 h-8 @GetIconColor()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "0";
+    [Parameter] public string Icon { get; set; } = "clock";
+    [Parameter] public string Color { get; set; } = "blue";
+    [Parameter] public string Trend { get; set; } = "";
+
+    private string GetBorderColor() => Color switch
+    {
+        "yellow" => "border-yellow-500",
+        "green" => "border-green-500",
+        "blue" => "border-blue-500",
+        "red" => "border-red-500",
+        _ => "border-blue-500"
+    };
+
+    private string GetIconBgColor() => Color switch
+    {
+        "yellow" => "bg-yellow-100",
+        "green" => "bg-green-100",
+        "blue" => "bg-blue-100",
+        "red" => "bg-red-100",
+        _ => "bg-blue-100"
+    };
+
+    private string GetIconColor() => Color switch
+    {
+        "yellow" => "text-yellow-600",
+        "green" => "text-green-600",
+        "blue" => "text-blue-600",
+        "red" => "text-red-600",
+        _ => "text-blue-600"
+    };
+}

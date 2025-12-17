@@ -1,0 +1,59 @@
+@page "/admin"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using WebApp.Components.UI
+
+<PageTitle>Dashboard - Admin Panel</PageTitle>
+
+<div class="space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard 
+            Title="Total Pending"
+            Value="24"
+            Icon="clock"
+            Color="yellow"
+            Trend="+3 from yesterday" />
+        
+        <StatCard 
+            Title="Total Paid"
+            Value="12"
+            Icon="check-circle"
+            Color="green"
+            Trend="+5 this week" />
+        
+        <StatCard 
+            Title="Total Users"
+            Value="156"
+            Icon="users"
+            Color="blue"
+            Trend="+8 this month" />
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ActivityLog 
+            Title="Payment Log"
+            LogType="payment"
+            Items="@_paymentLogs" />
+        
+        <ActivityLog 
+            Title="Application Log"
+            LogType="application"
+            Items="@_applicationLogs" />
+    </div>
+</div>
+
+@code {
+    private List<ActivityLog.ActivityLogItem> _paymentLogs = new()
+    {
+        new("Mahmud Ali", "paid ৳500 for Transcript Request", DateTime.Now.AddHours(-2)),
+        new("Jessica Sameh", "paid ৳300 for Certificate Request", DateTime.Now.AddHours(-5)),
+        new("Ahmed Khan", "paid ৳450 for Course Completion", DateTime.Now.AddDays(-1))
+    };
+
+    private List<ActivityLog.ActivityLogItem> _applicationLogs = new()
+    {
+        new("Mahmud Ali", "applied for Transcript Request", DateTime.Now.AddHours(-2)),
+        new("Jessica Sameh", "applied for Certificate Request", DateTime.Now.AddHours(-5)),
+        new("Ahmed Khan", "applied for Course Completion", DateTime.Now.AddDays(-1))
+    };
+}

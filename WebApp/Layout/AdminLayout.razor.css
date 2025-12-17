@@ -1,0 +1,25 @@
+::deep .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--dark-gray);
+    transition: all 0.2s;
+    margin-bottom: 0.25rem;
+		border-top-left-radius: 20px;
+		border-bottom-left-radius: 20px;
+}
+
+::deep .nav-item:hover {
+    background-color: var(--primary-light);
+    color: white;
+}
+
+::deep .nav-item.active {
+    background-color: var(--primary);
+    color: white;
+}
+
+::deep .nav-item svg {
+    flex-shrink: 0;
+}

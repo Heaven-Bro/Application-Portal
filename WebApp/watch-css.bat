@@ -1,0 +1,3 @@
+@echo off
+echo Watching Tailwind CSS...
+tailwindcss.exe -i ./wwwroot/css/input.css -o ./wwwroot/css/output.css --watch

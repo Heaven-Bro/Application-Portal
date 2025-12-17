@@ -1,0 +1,192 @@
+@page "/login"
+@using WebApp.Services
+@inject NavigationManager Navigation
+@inject AuthService AuthService
+
+@if (isChecking)
+{
+    <div class="redirect-wrapper">
+        @if (isAlreadyLoggedIn)
+        {
+            <div class="redirect-card flex flex-col puff-card items-center justify-center">
+                <svg class="check-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <h2>You're already logged in</h2>
+                <p>Redirecting to homepage...</p>
+            </div>
+        }
+    </div>
+}
+else if (!isAlreadyLoggedIn)
+{
+    <div class="login-wrapper">
+        <div class="login-card puff-card">
+            <div class="login-header">
+                <h1 class="login-title">Sign in</h1>
+                <p class="login-subtitle">Use your institutional account</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-error">
+                    @errorMessage
+                </div>
+            }
+
+            <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-field">
+                    <label for="email">Email address</label>
+                    <input id="email"
+                           @bind="loginModel.Email" 
+                           @bind:event="oninput"
+                           type="email"
+                           class="form-input"
+                           placeholder="name@university.edu"
+                           disabled="@isProcessing" 
+                           autocomplete="email" />
+                    <ValidationMessage For="@(() => loginModel.Email)" class="field-error" />
+                </div>
+
+                <div class="form-field">
+                    <label for="password">Password</label>
+                    <div class="password-field">
+                        <input id="password"
+                               @bind="loginModel.Password" 
+                               @bind:event="oninput"
+                               type="@(showPassword ? "text" : "password")"
+                               class="form-input"
+                               placeholder="Enter your password"
+                               disabled="@isProcessing"
+                               autocomplete="current-password" />
+                        <button type="button" 
+                                @onclick="TogglePassword" 
+                                class="toggle-password"
+                                disabled="@isProcessing"
+                                aria-label="@(showPassword ? "Hide password" : "Show password")">
+                            @if (showPassword)
+                            {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            }
+                            else
+                            {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            }
+                        </button>
+                    </div>
+                    <ValidationMessage For="@(() => loginModel.Password)" class="field-error" />
+                </div>
+
+                <div class="form-actions">
+                    <a href="/forgot-password" class="link-secondary">Forgot password?</a>
+                </div>
+
+                <SubmitButton 
+                    ButtonText="Sign in" 
+                    ProcessingText="Signing in..." 
+                    IsProcessing="isProcessing" />
+            </EditForm>
+
+            <div class="login-footer">
+                <span>Not registered?</span>
+                <a href="/register" class="link-primary">Create a new account</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private LoginModel loginModel = new();
+    private bool isProcessing = false;
+    private bool isChecking = true;
+    private bool isAlreadyLoggedIn = false;
+    private bool showPassword = false;
+    private string? errorMessage;
+    private string? returnUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var isLoggedIn = await AuthService.IsAuthenticatedAsync();
+            if (isLoggedIn)
+            {
+                isAlreadyLoggedIn = true;
+                StateHasChanged();
+                
+                await Task.Delay(1500);
+                Navigation.NavigateTo("/", true);
+                return;
+            }
+
+            var uri = new Uri(Navigation.Uri);
+            var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            returnUrl = queryParams["returnUrl"];
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Login init failed: {ex.Message}");
+        }
+        finally
+        {
+            isChecking = false;
+        }
+    }
+
+    private void TogglePassword()
+    {
+        if (isProcessing) return;
+        showPassword = !showPassword;
+    }
+
+    private async Task HandleLogin()
+    {
+        if (isProcessing) return;
+
+        try
+        {
+            isProcessing = true;
+            errorMessage = null;
+            StateHasChanged();
+
+            var result = await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
+
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl, true);
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Login failed: {ex.Message}");
+            errorMessage = "An unexpected error occurred. Please try again.";
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    public class LoginModel
+    {
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = "";
+    }
+}
