@@ -13,6 +13,105 @@
     </div>
 
     <div class="bg-white rounded-lg shadow p-6">
-        <p class="text-gray-600">Services content coming soon...</p>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            ID
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Service Name
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Description
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Version
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created Date
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    @foreach (var service in _services)
+                    {
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm text-gray-900">@service.Id</td>
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900">@service.Name</td>
+                            <td class="px-4 py-3 text-sm text-gray-500">
+                                @(service.Description.Length > 60 
+                                    ? service.Description.Substring(0, 60) + "..." 
+                                    : service.Description)
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-700">v@service.ServiceVersion</td>
+                            <td class="px-4 py-3 text-sm text-gray-500">
+                                @service.CreatedAt.ToString("dd MMM yyyy")
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <span class="inline-flex px-2 py-1 text-xs leading-5 font-semibold rounded-full
+                                               @(service.IsActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800")">
+                                    @(service.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500">
+                                <button class="text-blue-600 hover:text-blue-800 mr-3">Edit</button>
+                                <button class="text-red-600 hover:text-red-800">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
+
+@code {
+    public class ServiceItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = default!;
+        public string Description { get; set; } = default!;
+        public int ServiceVersion { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    private List<ServiceItem> _services = new()
+    {
+        new ServiceItem 
+        { 
+            Id = 1, 
+            Name = "Transcript Request", 
+            Description = "Request official academic transcript for external use", 
+            ServiceVersion = 1,
+            CreatedAt = DateTime.Now.AddMonths(-2),
+            IsActive = true 
+        },
+        new ServiceItem 
+        { 
+            Id = 2, 
+            Name = "Certificate Request", 
+            Description = "Apply for degree or course completion certificate", 
+            ServiceVersion = 1,
+            CreatedAt = DateTime.Now.AddMonths(-1),
+            IsActive = true 
+        },
+        new ServiceItem 
+        { 
+            Id = 3, 
+            Name = "Equipment Borrowing", 
+            Description = "Borrow departmental equipment for academic purposes", 
+            ServiceVersion = 2,
+            CreatedAt = DateTime.Now.AddDays(-15),
+            IsActive = true 
+        }
+    };
+}
