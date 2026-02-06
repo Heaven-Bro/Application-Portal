@@ -77,3 +77,10 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, Result<lo
         return emailLower.Split('@')[0];
     }
 }
+
+
+
+
+
+
+

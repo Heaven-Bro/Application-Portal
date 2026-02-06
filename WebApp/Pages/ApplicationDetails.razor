@@ -1,0 +1,622 @@
+@page "/apply/{ApplicationId:long}"
+@attribute [Authorize(Roles = "Applicant")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Application Details</PageTitle>
+
+@if (isLoading)
+{
+    <div class="flex justify-center items-center min-h-screen">
+        <div class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-[var(--primary)]"></div>
+    </div>
+}
+else if (application == null)
+{
+    <div class="max-w-2xl mx-auto px-3 py-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p class="text-gray-500">Application not found</p>
+        <button @onclick='() => Navigation.NavigateTo("/my-applications")' 
+                class="mt-3 px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold">
+            Back to My Applications
+        </button>
+    </div>
+}
+else
+{
+    <div class="max-w-2xl mx-auto px-3 py-4 space-y-4">
+        
+        <div class="flex items-center justify-between">
+            <button @onclick='() => Navigation.NavigateTo("/my-applications")' 
+                    class="flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+            </button>
+            <span class="@GetStatusBadgeClass(ParseStatus(application.Status))">
+                @application.Status
+            </span>
+        </div>
+
+        <div>
+            <h1 class="text-lg font-bold text-gray-900">@application.ServiceName</h1>
+            <p class="text-xs text-gray-500">Application #@application.Id</p>
+        </div>
+
+        @if (application.ScheduledDateTime.HasValue)
+        {
+            <div class="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center gap-2 text-green-800 text-sm">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span class="font-medium">@application.ScheduledDateTime.Value.ToString("MMM dd, yyyy 'at' hh:mm tt")</span>
+                </div>
+            </div>
+        }
+
+        <div class="bg-white rounded-lg border p-4 space-y-3">
+            @foreach (var step in application.Steps)
+            {
+                var submission = step.Submission;
+                var hasSubmission = submission != null;
+                var isApproved = hasSubmission && submission?.Status == "Approved";
+                var isPendingApproval = hasSubmission && submission?.Status == "Pending" && step.RequiresApproval;
+                var isRejected = hasSubmission && submission?.Status == "Rejected";
+                var isCurrent = step.Order == application.CurrentStep;
+                var isLocked = IsApplicationLocked();
+                var isDisabled = ShouldDisableStep(step.Order);
+                
+                <div class="flex gap-3">
+                    <div class="flex flex-col items-center">
+                        <div class="@GetStepCircleClass(isApproved, isPendingApproval, isRejected, isCurrent, hasSubmission, step.RequiresApproval) w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0">
+                            @if (isApproved)
+                            {
+                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                </svg>
+                            }
+                            else if (isPendingApproval)
+                            {
+                                <svg class="w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            }
+                            else if (isRejected)
+                            {
+                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            }
+                            else if (hasSubmission && !step.RequiresApproval)
+                            {
+                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                </svg>
+                            }
+                            else
+                            {
+                                <span>@step.Order</span>
+                            }
+                        </div>
+                        @if (step.Order < application.Steps.Count)
+                        {
+                            <div class="@GetStepLineClass(isApproved || (hasSubmission && !step.RequiresApproval)) w-0.5 flex-1 min-h-[30px]"></div>
+                        }
+                    </div>
+                    
+                    <div class="flex-1 pb-2 min-w-0">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900">@step.Name</p>
+                                <p class="text-xs text-gray-500">@GetStepStatusText(isApproved, isPendingApproval, isRejected, hasSubmission, step.RequiresApproval, isCurrent)</p>
+                            </div>
+                        </div>
+
+                        @if (isRejected && !string.IsNullOrEmpty(submission?.RejectionReason))
+                        {
+                            <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
+                                <p class="text-red-800 font-medium">Rejected: @submission.RejectionReason</p>
+                            </div>
+                        }
+
+                        <div class="mt-3 space-y-3 @(isDisabled ? "opacity-60" : "")">
+                            @if (!string.IsNullOrEmpty(step.Instructions))
+                            {
+                                <div class="p-2 bg-blue-50 border-l-2 border-blue-500 rounded text-xs text-blue-900">
+                                    @step.Instructions
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(step.DownloadableFormUrl))
+                            {
+                                <a href="@step.DownloadableFormUrl" target="_blank"
+                                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 rounded text-xs font-medium text-gray-700">
+                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Download Form
+                                </a>
+                            }
+
+                            @if (!isDisabled)
+                            {
+                                @if (step.RequiresTextInput)
+                                {
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                            Response @(step.IsOptional ? "(Optional)" : "*")
+                                        </label>
+                                        <textarea @bind="stepFormDataCache[step.Order]"
+                                                  rows="4"
+                                                  class="w-full px-3 py-2 border rounded-lg text-sm focus:border-[var(--primary)] focus:outline-none"
+                                                  placeholder="Enter your response..."></textarea>
+                                    </div>
+                                }
+
+                                @if (step.RequiresFileUpload)
+                                {
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                            Documents @(step.IsOptional ? "(Optional)" : "*")
+                                        </label>
+                                        @if (step.UploadConfig != null && !string.IsNullOrEmpty(step.UploadConfig.Instructions))
+                                        {
+                                            <p class="text-xs text-gray-600 mb-2">@step.UploadConfig.Instructions</p>
+                                        }
+                                        
+                                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-[var(--primary)] cursor-pointer transition-colors">
+                                            <InputFile @key="@($"file-input-{step.Order}-{fileInputKey}")" 
+                                                       OnChange="@((e) => HandleFileSelected(e, step.Order))" 
+                                                       multiple 
+                                                       accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                                       class="hidden" 
+                                                       id="@($"upload-{step.Order}")" />
+                                            <label for="@($"upload-{step.Order}")" class="cursor-pointer block">
+                                                <svg class="mx-auto h-8 w-8 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                                <p class="text-xs text-gray-600">Click to upload files</p>
+                                            </label>
+                                        </div>
+                                        
+                                        @if (GetFilesForStep(step.Order).Any())
+                                        {
+                                            <div class="mt-2 space-y-1">
+                                                @foreach (var fileInfo in GetFilesForStep(step.Order))
+                                                {
+                                                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                                                        <span class="truncate">@fileInfo.Name (@fileInfo.Size)</span>
+                                                        <button type="button" @onclick="() => RemoveFile(step.Order, fileInfo.Name)" class="text-red-500 ml-2 shrink-0">
+                                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                <button type="button"
+                                        @onclick="@(() => HandleSubmitStep(step.Id, step.Order))"
+                                        disabled="@isSubmitting"
+                                        class="w-full px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                                    @if (isSubmitting)
+                                    {
+                                        <span>Submitting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Submit Step</span>
+                                    }
+                                </button>
+                            }
+
+                            @if (isPendingApproval)
+                            {
+                                <div class="flex items-center gap-1 text-yellow-600 font-medium text-xs pt-1">
+                                    <svg class="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span>Waiting for admin approval</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (application.Submissions.Any(s => s.Documents.Any()))
+        {
+            <div class="bg-white rounded-lg border p-4">
+                <h2 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Document Library
+                </h2>
+                
+                <div class="grid grid-cols-3 gap-2">
+                    @foreach (var submission in application.Submissions)
+                    {
+                        var isLatestForStep = IsLatestSubmissionForStep(submission.Id, submission.StepId);
+                        @foreach (var doc in submission.Documents)
+                        {
+                            <div class="relative border rounded overflow-hidden aspect-square bg-gray-50 group">
+                                @if (IsImage(doc.FileName))
+                                {
+                                    <img src="@GetDocumentUrl(doc.FilePath)" 
+                                         alt="@doc.FileName" 
+                                         class="w-full h-full object-cover cursor-pointer"
+                                         @onclick="() => OpenDocument(doc.FilePath)" />
+                                }
+                                else
+                                {
+                                    <div class="w-full h-full flex flex-col items-center justify-center cursor-pointer p-2"
+                                         @onclick="() => OpenDocument(doc.FilePath)">
+                                        <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
+                                        </svg>
+                                        <p class="text-xs text-gray-500 mt-1 text-center truncate w-full font-semibold">@GetFileExtension(doc.FileName)</p>
+                                    </div>
+                                }
+                                
+                                @if (isLatestForStep)
+                                {
+                                    <div class="absolute top-1 left-1 bg-green-500 rounded-full p-1 shadow flex items-center justify-center">
+                                        <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                }
+
+                                <a href="@GetDocumentUrl(doc.FilePath)" 
+                                   download 
+                                   class="absolute top-1 right-1 bg-white rounded-full p-1 shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                                   @onclick:stopPropagation="true">
+                                    <svg class="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                    </svg>
+                                </a>
+
+                                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-1.5 flex items-center justify-center gap-1">
+                                    <span class="font-semibold">Step @submission.StepOrder</span>
+                                    <span class="text-gray-300">•</span>
+                                    <span class="truncate">@submission.StepName</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+
+        @if (application.ServiceType == "Equipment" && application.RegisteredEquipment != null && application.RegisteredEquipment.Any())
+        {
+            <div class="bg-white rounded-lg border p-4">
+                <h2 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    Registered Equipment
+                </h2>
+                <div class="space-y-2">
+                    @foreach (var equipment in application.RegisteredEquipment)
+                    {
+                        <div class="p-3 bg-gray-50 rounded-lg">
+                            <p class="font-medium text-sm text-gray-900">@equipment.Name</p>
+                            <p class="text-xs text-gray-600 mt-0.5">Serial: @equipment.SerialNumber</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public long ApplicationId { get; set; }
+
+    private ApplicationDetailsDto? application;
+    private Dictionary<int, string> stepFormDataCache = new();
+    private Dictionary<int, List<FileInfo>> stepFilesCache = new();
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private int fileInputKey = 0;
+
+    private class FileInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Size { get; set; } = string.Empty;
+        public Stream Stream { get; set; } = Stream.Null;
+        public string ContentType { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplication();
+    }
+
+    private async Task LoadApplication()
+    {
+        try
+        {
+            isLoading = true;
+            application = await Http.GetFromJsonAsync<ApplicationDetailsDto>($"api/Application/{ApplicationId}");
+            
+            if (application != null)
+            {
+                stepFormDataCache.Clear();
+                stepFilesCache.Clear();
+                
+                foreach (var step in application.Steps)
+                {
+                    stepFormDataCache[step.Order] = step.Submission?.FormData ?? string.Empty;
+                    stepFilesCache[step.Order] = new List<FileInfo>();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load application");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e, int stepOrder)
+    {
+        const int maxFiles = 10;
+        const long maxSize = 10 * 1024 * 1024;
+
+        try
+        {
+            if (!stepFilesCache.ContainsKey(stepOrder))
+            {
+                stepFilesCache[stepOrder] = new List<FileInfo>();
+            }
+
+            var files = e.GetMultipleFiles(maxFiles);
+            
+            if (stepFilesCache[stepOrder].Count + files.Count > maxFiles)
+            {
+                ToastService.ShowWarning($"Maximum {maxFiles} files allowed");
+                return;
+            }
+
+            foreach (var file in files)
+            {
+                if (file.Size > maxSize)
+                {
+                    ToastService.ShowWarning($"{file.Name} exceeds 10MB");
+                    continue;
+                }
+
+                using var stream = file.OpenReadStream(maxSize);
+                var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                stepFilesCache[stepOrder].Add(new FileInfo
+                {
+                    Name = file.Name,
+                    Size = GetFileSize(file.Size),
+                    Stream = memoryStream,
+                    ContentType = file.ContentType ?? "application/octet-stream"
+                });
+            }
+
+            ToastService.ShowSuccess($"{files.Count} file(s) selected");
+            fileInputKey++;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("File selection failed");
+        }
+    }
+
+    private async Task HandleSubmitStep(long stepId, int stepOrder)
+    {
+        if (application == null) return;
+
+        var step = application.Steps.FirstOrDefault(s => s.Order == stepOrder);
+        if (step == null) return;
+
+        try
+        {
+            isSubmitting = true;
+
+            var hasFiles = stepFilesCache.ContainsKey(stepOrder) && stepFilesCache[stepOrder].Any();
+            var hasFormData = !string.IsNullOrWhiteSpace(stepFormDataCache.GetValueOrDefault(stepOrder));
+
+            if (!step.IsOptional)
+            {
+                if (step.RequiresFileUpload && !hasFiles)
+                {
+                    ToastService.ShowError("Please upload required documents");
+                    return;
+                }
+                if (step.RequiresTextInput && !hasFormData)
+                {
+                    ToastService.ShowError("Please provide required response");
+                    return;
+                }
+            }
+
+            var documentIds = new List<long>();
+
+            if (hasFiles)
+            {
+                foreach (var fileInfo in stepFilesCache[stepOrder])
+                {
+                    fileInfo.Stream.Position = 0;
+
+                    var content = new MultipartFormDataContent();
+                    var streamContent = new StreamContent(fileInfo.Stream);
+                    streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(fileInfo.ContentType);
+                    content.Add(streamContent, "file", fileInfo.Name);
+
+                    var uploadResponse = await Http.PostAsync("api/Document/upload", content);
+
+                    if (uploadResponse.IsSuccessStatusCode)
+                    {
+                        var result = await uploadResponse.Content.ReadFromJsonAsync<UploadResponse>();
+                        if (result?.DocumentId != null)
+                        {
+                            documentIds.Add(result.DocumentId.Value);
+                        }
+                    }
+                }
+            }
+
+            var formData = stepFormDataCache.GetValueOrDefault(stepOrder);
+
+            var submitRequest = new
+            {
+                StepId = stepId,
+                FormData = string.IsNullOrWhiteSpace(formData) ? null : formData,
+                DocumentIds = documentIds.Any() ? documentIds : null
+            };
+
+            var response = await Http.PostAsJsonAsync($"api/Application/{ApplicationId}/submit-step", submitRequest);
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Step submitted successfully!");
+
+                if (stepFilesCache.ContainsKey(stepOrder))
+                {
+                    foreach (var file in stepFilesCache[stepOrder])
+                    {
+                        file.Stream?.Dispose();
+                    }
+                    stepFilesCache[stepOrder].Clear();
+                }
+
+                await LoadApplication();
+            }
+            else
+            {
+                ToastService.ShowError("Submission failed");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("An error occurred");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void RemoveFile(int stepOrder, string fileName)
+    {
+        if (stepFilesCache.ContainsKey(stepOrder))
+        {
+            var fileToRemove = stepFilesCache[stepOrder].FirstOrDefault(f => f.Name == fileName);
+            if (fileToRemove != null)
+            {
+                fileToRemove.Stream?.Dispose();
+                stepFilesCache[stepOrder].Remove(fileToRemove);
+            }
+        }
+    }
+
+    private List<FileInfo> GetFilesForStep(int stepOrder) => stepFilesCache.GetValueOrDefault(stepOrder) ?? new List<FileInfo>();
+
+    private bool IsLatestSubmissionForStep(long submissionId, long stepId)
+    {
+        if (application == null) return false;
+        var latestSubmission = application.Submissions
+            .Where(s => s.StepId == stepId)
+            .OrderByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
+        return latestSubmission?.Id == submissionId;
+    }
+
+    private bool ShouldDisableStep(int stepOrder)
+    {
+        if (application == null || IsApplicationLocked()) return true;
+        if (stepOrder > application.CurrentStep) return true;
+        if (stepOrder < application.CurrentStep)
+        {
+            var step = application.Steps.FirstOrDefault(s => s.Order == stepOrder);
+            if (step?.Submission?.Status == "Approved") return true;
+        }
+        return false;
+    }
+
+    private bool IsApplicationLocked()
+    {
+        if (application == null) return true;
+        var status = ParseStatus(application.Status);
+        return status == ApplicationStatus.Approved || status == ApplicationStatus.Completed || status == ApplicationStatus.Rejected;
+    }
+
+    private string GetStepCircleClass(bool isApproved, bool isPendingApproval, bool isRejected, bool isCurrent, bool hasSubmission, bool requiresApproval)
+    {
+        if (isApproved) return "bg-green-500 text-white";
+        if (isPendingApproval) return "bg-yellow-500 text-white";
+        if (isRejected) return "bg-red-500 text-white";
+        if (hasSubmission && !requiresApproval) return "bg-green-500 text-white";
+        if (isCurrent) return "bg-[var(--primary)] text-white";
+        return "bg-gray-200 text-gray-600";
+    }
+
+    private string GetStepLineClass(bool isCompleted) => isCompleted ? "bg-green-500" : "bg-gray-200";
+    private string GetStepStatusText(bool isApproved, bool isPendingApproval, bool isRejected, bool hasSubmission, bool requiresApproval, bool isCurrent)
+    {
+        if (isApproved) return "✓ Approved";
+        if (isPendingApproval) return "⏳ Pending Approval";
+        if (isRejected) return "✗ Rejected";
+        if (hasSubmission && !requiresApproval) return "✓ Submitted";
+        if (isCurrent) return "In Progress";
+        return "Pending";
+    }
+
+    private string GetStatusBadgeClass(ApplicationStatus status) => status switch
+    {
+        ApplicationStatus.Draft => "px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700",
+        ApplicationStatus.Submitted => "px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700",
+        ApplicationStatus.InReview => "px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700",
+        ApplicationStatus.Approved => "px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700",
+        ApplicationStatus.Rejected => "px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700",
+        ApplicationStatus.Completed => "px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700",
+        _ => "px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700"
+    };
+
+    private ApplicationStatus ParseStatus(string status) => Enum.TryParse<ApplicationStatus>(status, true, out var result) ? result : ApplicationStatus.Draft;
+    private bool IsImage(string fileName) => Path.GetExtension(fileName).ToLower() is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp";
+    private string GetFileExtension(string fileName) => Path.GetExtension(fileName).ToUpper().TrimStart('.');
+    private string GetFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1) { order++; len /= 1024; }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private string GetDocumentUrl(string filePath) => $"{Http.BaseAddress?.ToString().TrimEnd('/')}{filePath}";
+    private void OpenDocument(string filePath) => Navigation.NavigateTo(GetDocumentUrl(filePath), true);
+
+    public enum ApplicationStatus { Draft, Submitted, InReview, Approved, Rejected, Completed }
+    public class ApplicationDetailsDto { public long Id { get; set; } public string ServiceName { get; set; } = string.Empty; public string ServiceType { get; set; } = string.Empty; public string ApplicantName { get; set; } = string.Empty; public string Status { get; set; } = string.Empty; public int CurrentStep { get; set; } public DateTime? ScheduledDateTime { get; set; } public string? AdminNotes { get; set; } public DateTime CreatedAt { get; set; } public List<StepDetailDto> Steps { get; set; } = new(); public List<SubmissionDto> Submissions { get; set; } = new(); public List<EquipmentDto>? RegisteredEquipment { get; set; } }
+    public class StepDetailDto { public long Id { get; set; } public string Name { get; set; } = string.Empty; public int Order { get; set; } public string? Instructions { get; set; } public string? DownloadableFormUrl { get; set; } public bool RequiresFileUpload { get; set; } public bool RequiresTextInput { get; set; } public bool IsOptional { get; set; } public bool RequiresApproval { get; set; } public UploadConfigDto? UploadConfig { get; set; } public SubmissionDto? Submission { get; set; } }
+    public class UploadConfigDto { public string? Label { get; set; } public string? Instructions { get; set; } public string[]? AllowedTypes { get; set; } public int? MaxFiles { get; set; } }
+    public class SubmissionDto { public long Id { get; set; } public long StepId { get; set; } public int StepOrder { get; set; } public string StepName { get; set; } = string.Empty; public string? FormData { get; set; } public string Status { get; set; } = "Pending"; public string? RejectionReason { get; set; } public DateTime SubmittedAt { get; set; } public List<DocumentDto> Documents { get; set; } = new(); }
+    public class DocumentDto { public long Id { get; set; } public string FileName { get; set; } = string.Empty; public string FilePath { get; set; } = string.Empty; }
+    public class EquipmentDto { public string Name { get; set; } = string.Empty; public string SerialNumber { get; set; } = string.Empty; }
+    public class UploadResponse { public long? DocumentId { get; set; } }
+}

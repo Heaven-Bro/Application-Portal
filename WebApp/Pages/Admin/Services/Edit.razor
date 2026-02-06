@@ -1,0 +1,442 @@
+@page "/admin/services/edit/{ServiceId:long}"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Edit Service - Admin Panel</PageTitle>
+
+<div class="max-w-5xl mx-auto p-3 md:p-5">
+    <div class="mb-5">
+        <button class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 mb-2" @onclick="NavigateBack">
+            <span>←</span>
+            <span>Back</span>
+        </button>
+        <h1 class="text-2xl md:text-3xl font-bold font-title text-gray-900">Edit Service</h1>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-10">
+            <div class="inline-block w-7 h-7 border-3 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+            <p class="text-gray-600 text-sm mt-2">Loading service...</p>
+        </div>
+    }
+    else if (loadError != null)
+    {
+        <div class="text-center py-10 bg-red-50 rounded-lg border border-red-100">
+            <div class="text-3xl mb-2">⚠</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1">Failed to load service</h3>
+            <p class="text-xs text-gray-600 mb-3">@loadError</p>
+            <button class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300" @onclick="LoadService">Retry</button>
+        </div>
+    }
+    else if (model != null)
+    {
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
+            <EditForm Model="model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="space-y-4 pb-4 border-b border-gray-200">
+                    <h3 class="text-base font-semibold font-title text-gray-900">Basic Information</h3>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Service Name *</label>
+                        <InputText class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                  @bind-Value="model.Name" 
+                                  placeholder="Service name" />
+                        <ValidationMessage For="@(() => model.Name)" class="text-xs text-red-600 mt-0.5" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                        <InputTextArea class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none" 
+                                      @bind-Value="model.Description" 
+                                      rows="3"
+                                      placeholder="Service description" />
+                        <ValidationMessage For="@(() => model.Description)" class="text-xs text-red-600 mt-0.5" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Service Type *</label>
+                        <InputSelect class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" @bind-Value="model.ServiceType">
+                            <option value="">-- Select --</option>
+                            <option value="0">Chairman Appointment</option>
+                            <option value="1">Equipment Loan</option>
+                            <option value="2">General Application</option>
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.ServiceType)" class="text-xs text-red-600 mt-0.5" />
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <InputCheckbox id="isActive" class="w-4 h-4 rounded border-gray-300" @bind-Value="model.IsActive" />
+                        <label for="isActive" class="text-sm font-medium text-gray-700 cursor-pointer">Active</label>
+                    </div>
+                </div>
+
+                <div class="space-y-4 pt-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-base font-semibold font-title text-gray-900">Service Steps</h3>
+                        <button type="button" class="flex items-center gap-1 px-3 py-1.5 bg-surface  text-sm rounded-lg hover:opacity-90" @onclick="AddStep">
+                            <span>+</span> Add Step
+                        </button>
+                    </div>
+
+                    @if (!model.Steps.Any())
+                    {
+                        <div class="text-center py-6 bg-gray-50 rounded-lg">
+                            <p class="text-gray-500 text-sm">No steps. Click "Add Step" to create one.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-3">
+                            @foreach (var (step, index) in model.Steps.Select((s, i) => (s, i)))
+                            {
+                                <div class="bg-gray-50 rounded-lg p-3 border-2 border-transparent hover:border-primary transition-colors">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-semibold text-primary font-title">Step @(index + 1)</span>
+                                            <label class="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                                                <InputCheckbox class="w-3 h-3 rounded border-gray-300" @bind-Value="step.IsOptional" />
+                                                <span>Optional</span>
+                                            </label>
+                                        </div>
+                                        <button type="button" class="px-2 py-0.5 bg-red-500  text-xs rounded hover:bg-red-600" @onclick="@(() => RemoveStep(index))">
+                                            Remove
+                                        </button>
+                                    </div>
+
+                                    <div class="space-y-2">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 mb-1">Step Name *</label>
+                                            <InputText class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                      @bind-Value="step.Name" 
+                                                      placeholder="Step name" />
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 mb-1">Instructions</label>
+                                            <InputTextArea class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none" 
+                                                          @bind-Value="step.Instructions" 
+                                                          rows="2"
+                                                          placeholder="Provide clear instructions for this step..." />
+                                            <p class="text-xs text-gray-500 mt-0.5">Guidance shown to students</p>
+                                        </div>
+
+                                        <div class="pt-1 border-t border-gray-200">
+                                            <p class="text-xs font-medium text-gray-700 mb-1.5">Downloadable Form (Optional)</p>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <InputText class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                          @bind-Value="step.DownloadableFormUrl" 
+                                                          placeholder="Form URL" />
+                                                <InputText class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                          @bind-Value="step.DownloadableFormLabel" 
+                                                          placeholder="Link text" />
+                                            </div>
+                                        </div>
+
+                                        <div class="pt-1 border-t border-gray-200">
+                                            <div class="flex items-center gap-2 mb-1.5">
+                                                <InputCheckbox id="@($"fileUpload_{index}")" 
+                                                              class="w-3.5 h-3.5 rounded border-gray-300" 
+                                                              @bind-Value="step.RequiresFileUpload" />
+                                                <label for="@($"fileUpload_{index}")" class="text-xs font-medium text-gray-700 cursor-pointer">
+                                                    Requires File Upload
+                                                </label>
+                                            </div>
+
+                                            @if (step.RequiresFileUpload)
+                                            {
+                                                <div class="ml-5 space-y-1.5 mt-1.5">
+                                                    <InputText class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                              @bind-Value="step.FileUploadLabel" 
+                                                              placeholder="Upload label (e.g., Upload Application)" />
+                                                    <InputText class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                              @bind-Value="step.FileUploadInstructions" 
+                                                              placeholder="Upload instructions" />
+                                                    <div class="grid grid-cols-2 gap-1.5">
+                                                        <InputText class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                                  @bind-Value="step.AllowedFileTypes" 
+                                                                  placeholder="pdf,jpg,png" />
+                                                        <InputNumber class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                                                                    @bind-Value="step.MaxFilesCount" 
+                                                                    placeholder="Max files" />
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <InputCheckbox id="@($"textInput_{index}")" 
+                                                          class="w-3.5 h-3.5 rounded border-gray-300" 
+                                                          @bind-Value="step.RequiresTextInput" />
+                                            <label for="@($"textInput_{index}")" class="text-xs font-medium text-gray-700 cursor-pointer">
+                                                Requires Text Input
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (errorMessage != null)
+                {
+                    <div class="flex items-start gap-2 p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg mt-3 text-sm">
+                        <span class="text-lg">⚠</span>
+                        <div class="flex-1">
+                            <p class="font-medium mb-0.5">Failed to update service</p>
+                            <p class="text-xs">@errorMessage</p>
+                        </div>
+                        <button type="button" class="text-red-600 hover:text-red-800" @onclick="@(() => errorMessage = null)">✕</button>
+                    </div>
+                }
+
+                <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-200">
+                    <button type="button" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50" @onclick="NavigateBack">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-primary hover:cursor-pointer  rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50" disabled="@isSubmitting">
+                        @(isSubmitting ? "Updating..." : "Update Service")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public long ServiceId { get; set; }
+
+    private EditServiceModel? model;
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private string? loadError;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadService();
+    }
+
+    private async Task LoadService()
+    {
+        try
+        {
+            isLoading = true;
+            loadError = null;
+
+            var pagedResult = await Http.GetFromJsonAsync<PagedResultDto>($"api/services?pageSize=1000");
+            var service = pagedResult?.Items.FirstOrDefault(s => s.Id == ServiceId);
+
+            if (service == null)
+            {
+                loadError = "Service not found";
+                return;
+            }
+
+            model = new EditServiceModel
+            {
+                Name = service.Name,
+                Description = service.Description,
+                ServiceType = GetServiceTypeValue(service.ServiceType),
+                IsActive = service.IsActive,
+                Steps = service.Steps.Select(s => new EditServiceStepModel
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    Order = s.Order,
+                    Instructions = s.Instructions,
+                    DownloadableFormUrl = s.DownloadableFormUrl,
+                    DownloadableFormLabel = "Download Form",
+                    RequiresFileUpload = s.RequiresFileUpload,
+                    RequiresTextInput = s.RequiresTextInput,
+                    IsOptional = false,
+                    FileUploadLabel = s.UploadConfig?.Label,
+                    FileUploadInstructions = s.UploadConfig?.Instructions,
+                    AllowedFileTypes = s.UploadConfig?.AllowedTypes != null ? string.Join(",", s.UploadConfig.AllowedTypes) : null,
+                    MaxFilesCount = s.UploadConfig?.MaxFiles
+                }).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Error loading service: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetServiceTypeValue(string serviceType)
+    {
+        return serviceType switch
+        {
+            "ChairmanAppointment" => "0",
+            "EquipmentLoan" => "1",
+            "GeneralApplication" => "2",
+            _ => "0"
+        };
+    }
+
+    private void AddStep()
+    {
+        if (model != null)
+        {
+            model.Steps.Add(new EditServiceStepModel
+            {
+                Order = model.Steps.Count + 1
+            });
+        }
+    }
+
+    private void RemoveStep(int index)
+    {
+        if (model != null)
+        {
+            model.Steps.RemoveAt(index);
+            for (int i = 0; i < model.Steps.Count; i++)
+            {
+                model.Steps[i].Order = i + 1;
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (model == null) return;
+
+        try
+        {
+            isSubmitting = true;
+            errorMessage = null;
+
+            var response = await Http.PutAsJsonAsync($"api/services/{ServiceId}", new
+            {
+                Name = model.Name,
+                Description = model.Description,
+                ServiceType = int.Parse(model.ServiceType),
+                IsActive = model.IsActive,
+                Steps = model.Steps.Select(s => new
+                {
+                    s.Id,
+                    s.Name,
+                    s.Order,
+                    s.RequiresFileUpload,
+                    s.RequiresTextInput,
+                    s.Instructions,
+                    s.DownloadableFormUrl,
+                    s.IsOptional,
+                    UploadConfig = s.RequiresFileUpload && !string.IsNullOrWhiteSpace(s.FileUploadLabel) 
+                        ? System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            Label = s.FileUploadLabel,
+                            Instructions = s.FileUploadInstructions,
+                            AllowedTypes = s.AllowedFileTypes?.Split(',').Select(t => t.Trim()).ToArray(),
+                            MaxFiles = s.MaxFilesCount
+                        }) 
+                        : null
+                }).ToList()
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess($"Service '{model.Name}' updated successfully!");
+                await Task.Delay(800);
+                Navigation.NavigateTo("/admin/services");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Server error: {errorContent}";
+                ToastService.ShowError("Failed to update service");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void NavigateBack() => Navigation.NavigateTo("/admin/services");
+
+    public class EditServiceModel
+    {
+        [Required]
+        [StringLength(255)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(1000)]
+        public string Description { get; set; } = string.Empty;
+
+        [Required]
+        public string ServiceType { get; set; } = string.Empty;
+
+        public bool IsActive { get; set; } = true;
+
+        public List<EditServiceStepModel> Steps { get; set; } = new();
+    }
+
+    public class EditServiceStepModel
+    {
+        public long? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int Order { get; set; }
+        public bool IsOptional { get; set; }
+        public bool RequiresFileUpload { get; set; }
+        public bool RequiresTextInput { get; set; }
+        public string? Instructions { get; set; }
+        public string? DownloadableFormUrl { get; set; }
+        public string? DownloadableFormLabel { get; set; }
+        public string? FileUploadLabel { get; set; }
+        public string? FileUploadInstructions { get; set; }
+        public string? AllowedFileTypes { get; set; }
+        public int? MaxFilesCount { get; set; }
+    }
+
+    public class PagedResultDto
+    {
+        public List<ServiceDto> Items { get; set; } = new();
+    }
+
+    public class ServiceDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public string ServiceType { get; set; } = string.Empty;
+        public List<ServiceStepDto> Steps { get; set; } = new();
+    }
+
+    public class ServiceStepDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int Order { get; set; }
+        public bool RequiresFileUpload { get; set; }
+        public bool RequiresTextInput { get; set; }
+        public string? Instructions { get; set; }
+        public string? DownloadableFormUrl { get; set; }
+        public UploadConfigDto? UploadConfig { get; set; }
+    }
+
+    public class UploadConfigDto
+    {
+        public string? Label { get; set; }
+        public string? Instructions { get; set; }
+        public string[]? AllowedTypes { get; set; }
+        public int? MaxFiles { get; set; }
+    }
+}

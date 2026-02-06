@@ -10,6 +10,8 @@ public interface IApplicationRepository
     Task<List<Application>> GetByApplicantIdAsync(long applicantId, CancellationToken cancellationToken = default);
     Task<List<Application>> GetByStatusAsync(ApplicationStatus status, CancellationToken cancellationToken = default);
     Task<List<Application>> GetPendingForAdminAsync(CancellationToken cancellationToken = default);
+    Task<List<Application>> GetAllForAdminAsync(CancellationToken cancellationToken = default); // ✅ ADD THIS
+    Task<bool> HasPendingApplicationsByServiceIdAsync(long serviceId, CancellationToken cancellationToken = default);
     Task AddAsync(Application application, CancellationToken cancellationToken = default);
     void Update(Application application);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -16,11 +16,17 @@ public record ApplicationDto(
 public record StepSubmissionDto(
     long Id,
     long StepId,
+    int StepOrder,
     string StepName,
-    int SubmissionVersion,
     string? FormData,
-    List<string> FilePaths,
     string Status,
     DateTime SubmittedAt,
-    string? RejectionReason
+    string? RejectionReason,
+    List<DocumentDto> Documents
+);
+
+public record DocumentDto(
+    long Id,
+    string FileName,
+    string FilePath
 );

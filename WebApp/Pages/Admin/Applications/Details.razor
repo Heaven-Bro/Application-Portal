@@ -1,0 +1,692 @@
+@page "/admin/applications/{ApplicationId:long}"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Application #@ApplicationId</PageTitle>
+
+@if (isLoading)
+{
+    <div class="flex justify-center items-center min-h-screen">
+        <div class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-blue-600"></div>
+    </div>
+}
+else if (application == null)
+{
+    <div class="max-w-2xl mx-auto px-3 py-8 text-center">
+        <svg class="mx-auto h-10 w-10 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p class="text-sm text-gray-500 mb-3">Application not found</p>
+        <button @onclick='() => Navigation.NavigateTo("/admin/applications")' 
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+            Back to Applications
+        </button>
+    </div>
+}
+else
+{
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 sm:mb-4">
+            <div class="flex items-center gap-2">
+                <button @onclick='() => Navigation.NavigateTo("/admin/applications")' 
+                        class="flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span class="hidden sm:inline">Back</span>
+                </button>
+                <h1 class="text-lg sm:text-xl font-bold text-gray-900">App #@application.Id</h1>
+            </div>
+            <span class="@GetStatusBadge(application.Status) self-start sm:self-auto">@application.Status</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+            <!-- Main Content -->
+            <div class="lg:col-span-2 space-y-3">
+                <!-- Applicant Info -->
+                <div class="bg-white rounded-lg border p-3 sm:p-4">
+                    <h2 class="text-sm font-bold text-gray-900 mb-3">Applicant Information</h2>
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2">
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Name</p>
+                            <p class="text-sm text-gray-900 mt-0.5">@application.ApplicantName</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Email</p>
+                            <p class="text-sm text-gray-900 mt-0.5 truncate">@application.ApplicantEmail</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Service</p>
+                            <p class="text-sm text-gray-900 mt-0.5">@application.ServiceName</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Type</p>
+                            <span class="inline-block mt-0.5 px-2 py-0.5 text-xs rounded-full @GetServiceTypeBadge(application.ServiceType)">
+                                @application.ServiceType
+                            </span>
+                        </div>
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Applied</p>
+                            <p class="text-sm text-gray-900 mt-0.5">@application.CreatedAt.ToString("MMM dd, yyyy")</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-medium text-gray-500">Progress</p>
+                            <p class="text-sm text-gray-900 mt-0.5">Step @application.CurrentStep / @application.TotalSteps</p>
+                        </div>
+                    </div>
+
+                    @if (application.ScheduledDateTime.HasValue)
+                    {
+                        <div class="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <div class="flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <div>
+                                    <p class="text-xs font-semibold text-green-800">Scheduled</p>
+                                    <p class="text-xs text-green-700">@application.ScheduledDateTime.Value.ToString("MMM dd, yyyy 'at' hh:mm tt")</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(application.AdminNotes))
+                    {
+                        <div class="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p class="text-xs font-semibold text-yellow-800 mb-1">Admin Notes</p>
+                            <p class="text-xs text-yellow-900">@application.AdminNotes</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- Steps -->
+                <div class="bg-white rounded-lg border p-3 sm:p-4">
+                    <h2 class="text-sm font-bold text-gray-900 mb-3">Application Steps</h2>
+                    
+                    @foreach (var step in application.Steps.OrderBy(s => s.Order))
+                    {
+                        <div class="mb-4 pb-4 border-b last:border-b-0 last:pb-0 last:mb-0">
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <div class="min-w-0 flex-1">
+                                    <h3 class="text-sm font-bold text-gray-900">Step @step.Order: @step.Name</h3>
+                                    @if (!string.IsNullOrWhiteSpace(step.Instructions))
+                                    {
+                                        <p class="text-xs text-gray-600 mt-0.5">@step.Instructions</p>
+                                    }
+                                </div>
+                                @if (step.RequiresApproval)
+                                {
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 whitespace-nowrap">Approval</span>
+                                }
+                            </div>
+
+                            @if (step.Submissions.Any())
+                            {
+                                @foreach (var submission in step.Submissions.OrderByDescending(s => s.SubmittedAt).Take(1))
+                                {
+                                    <div class="p-3 @(submission.IsLatest ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200") rounded-lg">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="@GetSubmissionStatusBadge(submission.Status)">@submission.Status</span>
+                                                @if (submission.IsLatest)
+                                                {
+                                                    <span class="text-xs px-1.5 py-0.5 bg-blue-600 text-white rounded">Latest</span>
+                                                }
+                                            </div>
+                                            <span class="text-xs text-gray-500">@submission.SubmittedAt.ToString("MMM dd")</span>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(submission.FormData))
+                                        {
+                                            <div class="mb-2">
+                                                <p class="text-xs font-medium text-gray-700 mb-1">Response:</p>
+                                                <p class="text-xs text-gray-900 whitespace-pre-wrap line-clamp-3">@submission.FormData</p>
+                                            </div>
+                                        }
+
+                                        @if (submission.Documents.Any())
+                                        {
+                                            <div class="mb-2">
+                                                <p class="text-xs font-medium text-gray-700 mb-1">Documents (@submission.Documents.Count):</p>
+                                                <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                                                    @foreach (var doc in submission.Documents.Take(4))
+                                                    {
+                                                        <a href="@GetDocumentUrl(doc.FilePath)" target="_blank" 
+                                                           class="block border rounded overflow-hidden hover:ring-2 hover:ring-blue-500">
+                                                            @if (IsImage(doc.FileName))
+                                                            {
+                                                                <img src="@GetDocumentUrl(doc.FilePath)" alt="@doc.FileName" class="w-full h-16 object-cover" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="w-full h-16 flex items-center justify-center bg-gray-100">
+                                                                    <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/>
+                                                                    </svg>
+                                                                </div>
+                                                            }
+                                                        </a>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(submission.RejectionReason))
+                                        {
+                                            <div class="p-2 bg-red-50 border border-red-200 rounded text-xs">
+                                                <p class="text-red-800"><strong>Rejected:</strong> @submission.RejectionReason</p>
+                                            </div>
+                                        }
+
+                                        @if (submission.IsLatest && submission.Status == "Pending" && step.RequiresApproval)
+                                        {
+                                            <div class="grid grid-cols-2 gap-2 mt-2">
+                                                <button @onclick="() => ShowApproveModal(submission.Id)" 
+                                                        class="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-semibold hover:bg-green-700">
+                                                    Approve
+                                                </button>
+                                                <button @onclick="() => ShowRejectModal(submission.Id)" 
+                                                        class="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700">
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-xs text-gray-500">No submissions yet</p>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-3 lg:sticky lg:top-4 lg:self-start">
+                <!-- Actions -->
+                <div class="bg-white rounded-lg border p-3">
+                    <h2 class="text-sm font-bold text-gray-900 mb-2">Quick Actions</h2>
+                    
+                    @if (CanScheduleAppointment())
+                    {
+                        <button @onclick="ShowScheduleModal" 
+                                class="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm font-semibold hover:bg-blue-700 mb-2">
+                            📅 Schedule Appointment
+                        </button>
+                    }
+
+                    @if (application.ServiceType == "Equipment" && CanAssignEquipment())
+                    {
+                        <button @onclick="ShowAssignEquipmentModal" 
+                                class="w-full px-3 py-2 bg-orange-600 text-white rounded text-sm font-semibold hover:bg-orange-700">
+                            🔧 Assign Equipment
+                        </button>
+                    }
+                </div>
+
+                <!-- Equipment -->
+                @if (application.EquipmentAssignments.Any())
+                {
+                    <div class="bg-white rounded-lg border p-3">
+                        <h2 class="text-sm font-bold text-gray-900 mb-2">Equipment</h2>
+                        @foreach (var assignment in application.EquipmentAssignments)
+                        {
+                            <div class="p-2 bg-gray-50 border rounded mb-2 last:mb-0">
+                                <div class="flex items-start justify-between gap-2 mb-1">
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-gray-900 truncate">@assignment.EquipmentName</p>
+                                        <p class="text-xs text-gray-500">@assignment.EquipmentCode</p>
+                                    </div>
+                                    <span class="text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 whitespace-nowrap">@assignment.Status</span>
+                                </div>
+                                <p class="text-xs text-gray-600">📌 @assignment.AssignedAt.ToString("MMM dd, yyyy")</p>
+                                @if (assignment.ExpectedReturnDate.HasValue)
+                                {
+                                    <p class="text-xs text-gray-600">🔄 @assignment.ExpectedReturnDate.Value.ToString("MMM dd, yyyy")</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Approve Modal -->
+@if (showApproveModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3" @onclick="CloseModals">
+        <div class="bg-white rounded-lg p-4 max-w-md w-full" @onclick:stopPropagation="true">
+            <h3 class="text-base font-bold text-gray-900 mb-2">Approve Submission</h3>
+            <p class="text-sm text-gray-600 mb-4">Confirm approval of this submission?</p>
+            <div class="flex gap-2">
+                <button @onclick="HandleApprove" 
+                        disabled="@isProcessing"
+                        class="flex-1 px-3 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 disabled:opacity-50">
+                    @(isProcessing ? "Approving..." : "Approve")
+                </button>
+                <button @onclick="CloseModals" 
+                        disabled="@isProcessing"
+                        class="flex-1 px-3 py-2 border rounded text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Reject Modal -->
+@if (showRejectModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3" @onclick="CloseModals">
+        <div class="bg-white rounded-lg p-4 max-w-md w-full" @onclick:stopPropagation="true">
+            <h3 class="text-base font-bold text-gray-900 mb-3">Reject Submission</h3>
+            <textarea @bind="rejectionReason" 
+                      rows="4"
+                      class="w-full px-3 py-2 border rounded text-sm focus:border-red-500 focus:outline-none mb-3"
+                      placeholder="Reason for rejection..."></textarea>
+            <div class="flex gap-2">
+                <button @onclick="HandleReject" 
+                        disabled="@(isProcessing || string.IsNullOrWhiteSpace(rejectionReason))"
+                        class="flex-1 px-3 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700 disabled:opacity-50">
+                    @(isProcessing ? "Rejecting..." : "Reject")
+                </button>
+                <button @onclick="CloseModals" 
+                        disabled="@isProcessing"
+                        class="flex-1 px-3 py-2 border rounded text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Schedule Modal -->
+@if (showScheduleModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3" @onclick="CloseModals">
+        <div class="bg-white rounded-lg p-4 max-w-md w-full" @onclick:stopPropagation="true">
+            <h3 class="text-base font-bold text-gray-900 mb-3">Schedule Appointment</h3>
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date & Time *</label>
+                    <input type="datetime-local" 
+                           @bind="scheduledDateTime"
+                           class="w-full px-3 py-2 border rounded text-sm focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                    <textarea @bind="scheduleNotes" 
+                              rows="3"
+                              class="w-full px-3 py-2 border rounded text-sm focus:border-blue-500 focus:outline-none"
+                              placeholder="Additional notes..."></textarea>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button @onclick="HandleSchedule" 
+                        disabled="@(isProcessing || !scheduledDateTime.HasValue)"
+                        class="flex-1 px-3 py-2 bg-blue-600 text-white rounded text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+                    @(isProcessing ? "Scheduling..." : "Schedule")
+                </button>
+                <button @onclick="CloseModals" 
+                        disabled="@isProcessing"
+                        class="flex-1 px-3 py-2 border rounded text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Equipment Assignment Modal -->
+@if (showAssignEquipmentModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3" @onclick="CloseModals">
+        <div class="bg-white rounded-lg p-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto" @onclick:stopPropagation="true">
+            <h3 class="text-base font-bold text-gray-900 mb-3">Assign Equipment</h3>
+            
+            <input type="text" 
+                   @bind="equipmentSearchTerm"
+                   @bind:event="oninput"
+                   @onkeyup="SearchEquipment"
+                   placeholder="Search by code, name, or category..."
+                   class="w-full px-3 py-2 border rounded text-sm focus:border-orange-500 focus:outline-none mb-3" />
+
+            @if (isSearchingEquipment)
+            {
+                <div class="flex justify-center py-4">
+                    <div class="animate-spin rounded-full h-6 w-6 border-2 border-gray-200 border-t-orange-600"></div>
+                </div>
+            }
+            else if (availableEquipments.Any())
+            {
+                <div class="border rounded mb-3 max-h-60 overflow-y-auto">
+                    @foreach (var equipment in availableEquipments)
+                    {
+                        <div class="p-2 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer @(selectedEquipmentId == equipment.Id ? "bg-orange-50 border-l-2 border-l-orange-600" : "")"
+                             @onclick="() => SelectEquipment(equipment.Id)">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-gray-900">@equipment.Name</p>
+                                    <p class="text-xs text-gray-600">@equipment.EquipmentCode | @equipment.Category</p>
+                                </div>
+                                <span class="text-xs px-1.5 py-0.5 rounded @GetConditionBadge(equipment.Condition) whitespace-nowrap">
+                                    @equipment.Condition
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(equipmentSearchTerm))
+            {
+                <p class="text-sm text-gray-500 text-center py-4">No equipment found</p>
+            }
+
+            @if (selectedEquipmentId > 0)
+            {
+                <div class="p-2 bg-orange-50 border border-orange-200 rounded mb-3">
+                    <p class="text-xs font-medium text-orange-800 mb-0.5">Selected</p>
+                    <p class="text-sm text-orange-900">@availableEquipments.FirstOrDefault(e => e.Id == selectedEquipmentId)?.Name</p>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Return Date (Optional)</label>
+                    <input type="date" 
+                           @bind="equipmentReturnDate"
+                           class="w-full px-3 py-2 border rounded text-sm focus:border-orange-500 focus:outline-none" />
+                </div>
+            }
+
+            <div class="flex gap-2">
+                <button @onclick="HandleAssignEquipment" 
+                        disabled="@(isProcessing || selectedEquipmentId == 0)"
+                        class="flex-1 px-3 py-2 bg-orange-600 text-white rounded text-sm font-semibold hover:bg-orange-700 disabled:opacity-50">
+                    @(isProcessing ? "Assigning..." : "Assign")
+                </button>
+                <button @onclick="CloseModals" 
+                        disabled="@isProcessing"
+                        class="flex-1 px-3 py-2 border rounded text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long ApplicationId { get; set; }
+
+    private AdminApplicationDetailsDto? application;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+
+    private bool showApproveModal = false;
+    private bool showRejectModal = false;
+    private bool showScheduleModal = false;
+    private bool showAssignEquipmentModal = false;
+    
+    private long selectedSubmissionId = 0;
+    private string rejectionReason = string.Empty;
+    private DateTime? scheduledDateTime = null;
+    private string scheduleNotes = string.Empty;
+    
+    private List<AvailableEquipmentDto> availableEquipments = new();
+    private string equipmentSearchTerm = string.Empty;
+    private bool isSearchingEquipment = false;
+    private long selectedEquipmentId = 0;
+    private DateTime? equipmentReturnDate = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplication();
+    }
+
+    private async Task LoadApplication()
+    {
+        isLoading = true;
+        try
+        {
+            application = await Http.GetFromJsonAsync<AdminApplicationDetailsDto>($"api/admin/applications/{ApplicationId}");
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to load application");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowApproveModal(long submissionId)
+    {
+        selectedSubmissionId = submissionId;
+        showApproveModal = true;
+    }
+
+    private void ShowRejectModal(long submissionId)
+    {
+        selectedSubmissionId = submissionId;
+        rejectionReason = string.Empty;
+        showRejectModal = true;
+    }
+
+    private void ShowScheduleModal()
+    {
+        scheduledDateTime = null;
+        scheduleNotes = string.Empty;
+        showScheduleModal = true;
+    }
+
+    private void ShowAssignEquipmentModal()
+    {
+        availableEquipments.Clear();
+        equipmentSearchTerm = string.Empty;
+        selectedEquipmentId = 0;
+        equipmentReturnDate = null;
+        showAssignEquipmentModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showApproveModal = false;
+        showRejectModal = false;
+        showScheduleModal = false;
+        showAssignEquipmentModal = false;
+        selectedSubmissionId = 0;
+        rejectionReason = string.Empty;
+        selectedEquipmentId = 0;
+    }
+
+    private async Task HandleApprove()
+    {
+        isProcessing = true;
+        try
+        {
+            var response = await Http.PostAsync($"api/admin/applications/submissions/{selectedSubmissionId}/approve", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Approved successfully");
+                CloseModals();
+                await LoadApplication();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to approve");
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task HandleReject()
+    {
+        isProcessing = true;
+        try
+        {
+            var request = new RejectSubmissionRequest { RejectionReason = rejectionReason };
+            var response = await Http.PostAsJsonAsync($"api/admin/applications/submissions/{selectedSubmissionId}/reject", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Rejected successfully");
+                CloseModals();
+                await LoadApplication();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to reject");
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task HandleSchedule()
+    {
+        if (!scheduledDateTime.HasValue) return;
+
+        isProcessing = true;
+        try
+        {
+            var request = new ScheduleAppointmentRequest { ScheduledDateTime = scheduledDateTime.Value, Notes = scheduleNotes };
+            var response = await Http.PostAsJsonAsync($"api/admin/applications/{ApplicationId}/schedule", request);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Scheduled successfully");
+                CloseModals();
+                await LoadApplication();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to schedule");
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task SearchEquipment()
+    {
+        if (string.IsNullOrWhiteSpace(equipmentSearchTerm) || equipmentSearchTerm.Length < 2)
+        {
+            availableEquipments.Clear();
+            return;
+        }
+
+        isSearchingEquipment = true;
+        try
+        {
+            availableEquipments = await Http.GetFromJsonAsync<List<AvailableEquipmentDto>>(
+                $"api/Equipment/search?searchTerm={Uri.EscapeDataString(equipmentSearchTerm)}") ?? new();
+        }
+        finally
+        {
+            isSearchingEquipment = false;
+        }
+    }
+
+    private void SelectEquipment(long equipmentId)
+    {
+        selectedEquipmentId = equipmentId;
+    }
+
+    private async Task HandleAssignEquipment()
+    {
+        if (selectedEquipmentId == 0) return;
+
+        isProcessing = true;
+        try
+        {
+            var request = new AssignEquipmentRequest
+            {
+                ApplicationId = ApplicationId,
+                EquipmentId = selectedEquipmentId,
+                ExpectedReturnDate = equipmentReturnDate
+            };
+
+            var response = await Http.PostAsJsonAsync("api/EquipmentAssignments", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Equipment assigned successfully");
+                CloseModals();
+                await LoadApplication();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to assign equipment");
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private bool CanScheduleAppointment() => application != null && (application.Status == "InReview" || application.Status == "Submitted");
+    private bool CanAssignEquipment() => application != null && (application.Status == "InReview" || application.Status == "Submitted");
+
+    private string GetStatusBadge(string status) => status switch
+    {
+        "Draft" => "px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700",
+        "Submitted" => "px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700",
+        "InReview" => "px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700",
+        "Approved" => "px-2 py-1 text-xs rounded-full bg-green-100 text-green-700",
+        "Rejected" => "px-2 py-1 text-xs rounded-full bg-red-100 text-red-700",
+        "Completed" => "px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700",
+        _ => "px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700"
+    };
+
+    private string GetServiceTypeBadge(string type) => type switch
+    {
+        "Equipment" => "bg-orange-100 text-orange-700",
+        "ChairmanAppointment" => "bg-indigo-100 text-indigo-700",
+        _ => "bg-gray-100 text-gray-700"
+    };
+
+    private string GetSubmissionStatusBadge(string status) => status switch
+    {
+        "Pending" => "text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700",
+        "Approved" => "text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700",
+        "Rejected" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        _ => "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"
+    };
+
+    private string GetConditionBadge(string condition) => condition switch
+    {
+        "Good" => "bg-green-100 text-green-700",
+        "Fair" => "bg-yellow-100 text-yellow-700",
+        _ => "bg-red-100 text-red-700"
+    };
+
+    private bool IsImage(string fileName) => Path.GetExtension(fileName).ToLower() is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp";
+    private string GetDocumentUrl(string filePath) => $"{Http.BaseAddress?.ToString().TrimEnd('/')}{filePath}";
+
+    // DTOs
+    public class ScheduleAppointmentRequest { public DateTime ScheduledDateTime { get; set; } public string? Notes { get; set; } }
+    public class RejectSubmissionRequest { public string RejectionReason { get; set; } = string.Empty; }
+    public class AssignEquipmentRequest { public long ApplicationId { get; set; } public long EquipmentId { get; set; } public DateTime? ExpectedReturnDate { get; set; } }
+    public class AvailableEquipmentDto { public long Id { get; set; } public string Name { get; set; } = string.Empty; public string EquipmentCode { get; set; } = string.Empty; public string Category { get; set; } = string.Empty; public string Condition { get; set; } = string.Empty; public string? Description { get; set; } }
+    public class AdminApplicationDetailsDto { public long Id { get; set; } public long ServiceId { get; set; } public string ServiceName { get; set; } = string.Empty; public string ServiceDescription { get; set; } = string.Empty; public string ServiceType { get; set; } = string.Empty; public long ApplicantId { get; set; } public string ApplicantName { get; set; } = string.Empty; public string ApplicantEmail { get; set; } = string.Empty; public string Status { get; set; } = string.Empty; public int CurrentStep { get; set; } public int TotalSteps { get; set; } public DateTime? ScheduledDateTime { get; set; } public DateTime? CompletedAt { get; set; } public string? AdminNotes { get; set; } public DateTime CreatedAt { get; set; } public List<AdminStepDetailDto> Steps { get; set; } = new(); public List<EquipmentAssignmentSummaryDto> EquipmentAssignments { get; set; } = new(); }
+    public class AdminStepDetailDto { public long Id { get; set; } public string Name { get; set; } = string.Empty; public int Order { get; set; } public string? Instructions { get; set; } public bool RequiresFileUpload { get; set; } public bool RequiresTextInput { get; set; } public bool IsOptional { get; set; } public bool RequiresApproval { get; set; } public List<AdminStepSubmissionDto> Submissions { get; set; } = new(); }
+    public class AdminStepSubmissionDto { public long Id { get; set; } public long StepId { get; set; } public int StepOrder { get; set; } public string StepName { get; set; } = string.Empty; public string? FormData { get; set; } public string Status { get; set; } = string.Empty; public DateTime SubmittedAt { get; set; } public DateTime? ReviewedAt { get; set; } public string? RejectionReason { get; set; } public bool IsLatest { get; set; } public List<AdminDocumentDto> Documents { get; set; } = new(); }
+    public class AdminDocumentDto { public long Id { get; set; } public string FileName { get; set; } = string.Empty; public string FilePath { get; set; } = string.Empty; }
+    public class EquipmentAssignmentSummaryDto { public long Id { get; set; } public long EquipmentId { get; set; } public string EquipmentName { get; set; } = string.Empty; public string EquipmentCode { get; set; } = string.Empty; public DateTime AssignedAt { get; set; } public DateTime? ExpectedReturnDate { get; set; } public string Status { get; set; } = string.Empty; }
+}

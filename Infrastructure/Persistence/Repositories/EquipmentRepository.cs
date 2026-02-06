@@ -1,8 +1,8 @@
 namespace Infrastructure.Persistence.Repositories;
 
-using Microsoft.EntityFrameworkCore;
 using Domain.Equipment;
 using Domain.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 public class EquipmentRepository : IEquipmentRepository
 {
@@ -15,21 +15,29 @@ public class EquipmentRepository : IEquipmentRepository
 
     public async Task<Equipment?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
-        return await _context.Equipments.FindAsync(new object[] { id }, cancellationToken);
+        return await _context.Equipments
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+    }
+
+    public async Task<List<Equipment>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Equipments
+            .OrderBy(e => e.EquipmentCode)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<List<Equipment>> GetAvailableAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Equipments
             .Where(e => e.IsAvailable)
-            .OrderBy(e => e.Name)
+            .OrderBy(e => e.EquipmentCode)
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<Equipment>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<List<Equipment>> GetOverdueAsync(CancellationToken cancellationToken = default)
     {
         return await _context.Equipments
-            .OrderBy(e => e.Name)
+            .Where(e => !e.IsAvailable)
             .ToListAsync(cancellationToken);
     }
 
@@ -41,6 +49,11 @@ public class EquipmentRepository : IEquipmentRepository
     public void Update(Equipment equipment)
     {
         _context.Equipments.Update(equipment);
+    }
+
+    public void Delete(Equipment equipment)
+    {
+        _context.Equipments.Remove(equipment);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

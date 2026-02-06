@@ -2,6 +2,8 @@ namespace Application.Features.Applications.Commands;
 
 using MediatR;
 using Application.Common.Models;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
 

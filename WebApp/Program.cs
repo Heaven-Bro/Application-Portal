@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using WebApp;
 using WebApp.Services;
 using Blazored.LocalStorage;
+using Blazored.Toast;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -20,5 +21,6 @@ builder.Services.AddScoped<AppAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(provider => 
     provider.GetRequiredService<AppAuthStateProvider>());
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddBlazoredToast();
 
 await builder.Build().RunAsync();

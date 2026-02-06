@@ -7,3 +7,10 @@ public interface ICurrentUserService
     string Role { get; }
     bool IsAuthenticated { get; }
 }
+
+
+
+
+
+
+

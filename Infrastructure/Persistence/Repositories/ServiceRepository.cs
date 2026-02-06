@@ -48,6 +48,18 @@ public class ServiceRepository : IServiceRepository
         await _context.Services.AddAsync(service, cancellationToken);
     }
 
+    public async Task DeleteAsync(Service service, CancellationToken cancellationToken = default)
+    {
+        _context.Services.Remove(service);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateAsync(Service service, CancellationToken cancellationToken = default)
+    {
+        _context.Services.Update(service);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     public void Update(Service service)
     {
         _context.Services.Update(service);
@@ -57,4 +69,11 @@ public class ServiceRepository : IServiceRepository
     {
         return await _context.SaveChangesAsync(cancellationToken);
     }
+    public async Task<List<Service>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Services
+            .Include(s => s.Steps)
+            .ToListAsync(cancellationToken);
+    }
+
 }

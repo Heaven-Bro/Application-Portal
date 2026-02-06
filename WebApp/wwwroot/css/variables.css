@@ -78,3 +78,6 @@
 .font-bn {
   font-family: var(--font-bn);
 }
+.bg-primary{
+  background: var(--primary) !important;
+}

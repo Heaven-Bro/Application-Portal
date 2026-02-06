@@ -57,13 +57,11 @@ namespace Infrastructure.Migrations
                     b.Property<long>("ServiceId")
                         .HasColumnType("bigint");
 
-                    b.Property<int>("ServiceVersion")
-                        .HasColumnType("int");
-
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -124,10 +122,8 @@ namespace Infrastructure.Migrations
                     b.Property<long>("StepId")
                         .HasColumnType("bigint");
 
-                    b.Property<int>("SubmissionVersion")
-                        .HasColumnType("int");
-
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -137,6 +133,117 @@ namespace Infrastructure.Migrations
                     b.HasIndex("ApplicationId", "StepId", "IsLatest");
 
                     b.ToTable("step_submissions", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Documents.StepSubmissionDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("Id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<long>("StepSubmissionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("StepSubmissionId");
+
+                    b.Property<long>("UserDocumentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("UserDocumentId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StepSubmissionId");
+
+                    b.HasIndex("UserDocumentId");
+
+                    b.ToTable("step_submission_documents", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Documents.UserDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("Id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("ApplicationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ApplicationId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CreatedBy");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("FileName");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("FilePath");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FileSize");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("FileType");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("ModifiedAt");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ModifiedBy");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("OriginalFileName");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("UserId");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int")
+                        .HasColumnName("Version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("user_documents", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Equipment.Equipment", b =>
@@ -152,11 +259,18 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
+                    b.Property<int>("Condition")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
 
                     b.Property<string>("EquipmentCode")
                         .IsRequired()
@@ -178,9 +292,12 @@ namespace Infrastructure.Migrations
                         .HasColumnType("varchar(255)");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Condition");
 
                     b.HasIndex("EquipmentCode")
                         .IsUnique();
@@ -248,7 +365,13 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("EquipmentAssignments");
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("equipmentassignments", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Identity.User", b =>
@@ -339,6 +462,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("varchar(100)");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("Year")
@@ -389,15 +513,16 @@ namespace Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
-                    b.Property<int>("ServiceVersion")
+                    b.Property<int>("ServiceType")
                         .HasColumnType("int");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsActive", "ServiceVersion");
+                    b.HasIndex("IsActive", "ServiceType");
 
                     b.ToTable("services", (string)null);
                 });
@@ -416,12 +541,15 @@ namespace Infrastructure.Migrations
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
+                    b.Property<string>("DownloadableFormUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
 
-                    b.Property<bool>("IsEquipmentAssignment")
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)");
+
+                    b.Property<bool>("IsOptional")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime?>("ModifiedAt")
@@ -447,7 +575,11 @@ namespace Infrastructure.Migrations
                     b.Property<long>("ServiceId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("UploadConfig")
+                        .HasColumnType("JSON");
+
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -466,6 +598,25 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Domain.Documents.StepSubmissionDocument", b =>
+                {
+                    b.HasOne("Domain.Applications.StepSubmission", "StepSubmission")
+                        .WithMany("Documents")
+                        .HasForeignKey("StepSubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Documents.UserDocument", "UserDocument")
+                        .WithMany("Submissions")
+                        .HasForeignKey("UserDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StepSubmission");
+
+                    b.Navigation("UserDocument");
+                });
+
             modelBuilder.Entity("Domain.Services.ServiceStep", b =>
                 {
                     b.HasOne("Domain.Services.Service", null)
@@ -476,6 +627,16 @@ namespace Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Domain.Applications.Application", b =>
+                {
+                    b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("Domain.Applications.StepSubmission", b =>
+                {
+                    b.Navigation("Documents");
+                });
+
+            modelBuilder.Entity("Domain.Documents.UserDocument", b =>
                 {
                     b.Navigation("Submissions");
                 });

@@ -23,6 +23,8 @@ public class ApplicationRepository : IApplicationRepository
     {
         return await _context.Applications
             .Include(a => a.Submissions)
+                .ThenInclude(s => s.Documents)
+                    .ThenInclude(d => d.UserDocument)
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
     }
 
@@ -46,9 +48,19 @@ public class ApplicationRepository : IApplicationRepository
     {
         return await _context.Applications
             .Include(a => a.Submissions)
+                .ThenInclude(s => s.Documents)
+                    .ThenInclude(d => d.UserDocument)
             .Where(a => a.Status == ApplicationStatus.Submitted || a.Status == ApplicationStatus.InReview)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> HasPendingApplicationsByServiceIdAsync(long serviceId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Applications
+            .Where(a => a.ServiceId == serviceId)
+            .AnyAsync(a => a.Status == ApplicationStatus.Submitted || a.Status == ApplicationStatus.InReview,
+                cancellationToken);
     }
 
     public async Task AddAsync(Application application, CancellationToken cancellationToken = default)
@@ -65,4 +77,12 @@ public class ApplicationRepository : IApplicationRepository
     {
         return await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<List<Domain.Applications.Application>> GetAllForAdminAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Applications
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
 }

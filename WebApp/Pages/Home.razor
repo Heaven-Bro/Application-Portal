@@ -1,7 +1,172 @@
 ﻿@page "/"
+@using Shared.Contracts.Services
+@using Shared.Contracts.Common
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Home - Services by CSE Department</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+    <div class="mb-8 md:mb-12">
+        <h1 class="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Available Services</h1>
+        <p class="text-sm md:text-base text-gray-600">Browse and apply for department services</p>
+    </div>
 
-Welcome to your new app.
+    @if (isLoading)
+    {
+        <div class="flex justify-center items-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 border-t-[var(--primary)]"></div>
+        </div>
+    }
+    else if (services == null || !services.Any())
+    {
+        <div class="text-center py-20">
+            <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+            <p class="text-gray-500 text-lg">No services available at the moment</p>
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            @foreach (var service in services)
+            {
+                <div class="group bg-white rounded-xl border-2 border-gray-100 hover:border-[var(--primary)] transition-all duration-300 overflow-hidden">
+                    <div class="p-5 md:p-6">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex-1">
+                                <h3 class="text-lg md:text-xl font-semibold text-gray-900 mb-1 line-clamp-2">@service.Name</h3>
+                                <span class="inline-block px-2.5 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
+                                    @service.ServiceType
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <p class="text-sm text-gray-600 mb-4 line-clamp-3 leading-relaxed">@service.Description</p>
+                        
+                        <div class="flex items-center justify-between text-xs text-gray-500 mb-4 pb-4 border-b border-gray-100">
+                            <div class="flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <span>@service.Steps.Count step@(service.Steps.Count != 1 ? "s" : "")</span>
+                            </div>
+                            <span class="flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                Active
+                            </span>
+                        </div>
+                        
+                        <button 
+                            @onclick="() => ApplyForService(service.Id)"
+                            disabled="@isApplying"
+                            class="w-full py-2.5 px-4 bg-white border-2 border-[var(--primary)] text-[var(--primary)] rounded-lg font-semibold text-sm transition-all duration-200 hover:bg-[var(--primary)] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            @if (isApplying)
+                            {
+                                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>Apply Now</span>
+                                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ServiceDto>? services;
+    private bool isLoading = true;
+    private bool isApplying = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServices();
+    }
+
+    private async Task LoadServices()
+    {
+        try
+        {
+            isLoading = true;
+            var response = await Http.GetFromJsonAsync<PagedResult<ServiceDto>>("api/Services");
+            
+            if (response?.Items != null && response.Items.Any())
+            {
+                services = response.Items.Where(s => s.IsActive).OrderBy(s => s.Id).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load services: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyForService(long serviceId)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+        {
+            ToastService.ShowWarning("Please login to apply for services");
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        if (!user.IsInRole("Applicant"))
+        {
+            ToastService.ShowError("Only applicants can apply for services");
+            return;
+        }
+
+        try
+        {
+            isApplying = true;
+            
+            var response = await Http.PostAsJsonAsync("api/Application/create", new { ServiceId = serviceId });
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CreateApplicationResponse>();
+                ToastService.ShowSuccess("Application created successfully!");
+                Navigation.NavigateTo($"/apply/{result?.ApplicationId}");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ToastService.ShowError("Failed to create application");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isApplying = false;
+        }
+    }
+
+    public class CreateApplicationResponse
+    {
+        public long ApplicationId { get; set; }
+    }
+}

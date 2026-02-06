@@ -2,6 +2,8 @@ namespace Application.Features.Auth.Queries;
 
 using MediatR;
 using Application.Common.Models;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
 
@@ -44,3 +46,10 @@ public class LoginQueryHandler(
         return Result<LoginResponse>.Success(response);
     }
 }
+
+
+
+
+
+
+

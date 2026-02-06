@@ -1,0 +1,301 @@
+@page "/admin/services"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IToastService ToastService
+@using Shared.Contracts.Services
+@using Shared.Contracts.Common
+
+
+<PageTitle>Services Management - Admin Panel</PageTitle>
+
+<div class="max-w-7xl mx-auto p-3 md:p-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold font-title text-gray-900">Services Management</h1>
+            <p class="text-xs md:text-sm text-gray-600 mt-0.5">Manage all university services</p>
+        </div>
+        <button class="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:opacity-90 transition-opacity" @onclick="NavigateToCreate">
+            <span>+</span>
+            <span>Create Service</span>
+        </button>
+    </div>
+
+    <div class="space-y-3 mb-5">
+        <div class="relative">
+            <input type="text" 
+                   class="w-full px-3 py-2 pl-9 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                   placeholder="Search services..."
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   @onkeyup="HandleSearchKeyUp" />
+            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            @if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                <button class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm" @onclick="ClearSearch">✕</button>
+            }
+        </div>
+        
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedType == null ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="() => FilterByType(null)">
+                All
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedType == 0 ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="() => FilterByType(0)">
+                Chairman
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedType == 1 ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="() => FilterByType(1)">
+                Equipment
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedType == 2 ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="() => FilterByType(2)">
+                General
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-10">
+            <div class="inline-block w-7 h-7 border-3 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+            <p class="text-gray-600 text-sm mt-2">Loading...</p>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="text-center py-10 bg-red-50 rounded-lg border border-red-100">
+            <div class="text-3xl mb-2">⚠</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1">Something went wrong</h3>
+            <p class="text-xs text-gray-600 mb-3">@errorMessage</p>
+            <button class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300" @onclick="LoadServices">Retry</button>
+        </div>
+    }
+    else if (pagedResult == null || !pagedResult.Items.Any())
+    {
+        <div class="text-center py-10 bg-gray-50 rounded-lg">
+            <div class="text-3xl mb-2">📋</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1">No services found</h3>
+            <p class="text-xs text-gray-600 mb-3">@(searchTerm != null ? "Try different search terms" : "Create your first service")</p>
+            @if (searchTerm == null)
+            {
+                <button class="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:opacity-90" @onclick="NavigateToCreate">Create Service</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+            @foreach (var service in pagedResult.Items)
+            {
+                <ServiceCard Service="service" 
+                            OnEdit="@(() => NavigateToEdit(service.Id))"
+                            OnDelete="@(() => ShowDeleteConfirm(service.Id))"
+                            OnToggleActive="@(() => ToggleServiceStatus(service.Id))" />
+            }
+        </div>
+
+        @if (pagedResult.TotalPages > 1)
+        {
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs text-gray-600">
+                    <strong>@((pagedResult.Page - 1) * pagedResult.PageSize + 1)</strong> - <strong>@Math.Min(pagedResult.Page * pagedResult.PageSize, pagedResult.TotalCount)</strong> of <strong>@pagedResult.TotalCount</strong>
+                </div>
+
+                <div class="flex items-center gap-1">
+                    <button class="p-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed" 
+                            @onclick="@(() => ChangePage(1))" 
+                            disabled="@(!pagedResult.HasPrevious)">
+                        ⏮
+                    </button>
+                    <button class="p-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed" 
+                            @onclick="@(() => ChangePage(pagedResult.Page - 1))" 
+                            disabled="@(!pagedResult.HasPrevious)">
+                        ◀
+                    </button>
+                    
+                    @for (int i = GetStartPage(); i <= GetEndPage(); i++)
+                    {
+                        int pageNum = i;
+                        <button class="min-w-[2rem] px-2 py-1.5 text-xs border rounded @(pageNum == pagedResult.Page ? "bg-primary text-white border-primary" : "border-gray-300 hover:bg-gray-50")" 
+                                @onclick="@(() => ChangePage(pageNum))">
+                            @pageNum
+                        </button>
+                    }
+                    
+                    <button class="p-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed" 
+                            @onclick="@(() => ChangePage(pagedResult.Page + 1))" 
+                            disabled="@(!pagedResult.HasNext)">
+                        ▶
+                    </button>
+                    <button class="p-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed" 
+                            @onclick="@(() => ChangePage(pagedResult.TotalPages))" 
+                            disabled="@(!pagedResult.HasNext)">
+                        ⏭
+                    </button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private PagedResultDto? pagedResult;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string searchTerm = string.Empty;
+    private int? selectedType;
+    private int currentPage = 1;
+    private int pageSize = 9;
+    private System.Timers.Timer? searchDebounceTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServices();
+    }
+
+    private async Task LoadServices()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            
+            var queryParams = $"?page={currentPage}&pageSize={pageSize}";
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                queryParams += $"&search={Uri.EscapeDataString(searchTerm)}";
+            if (selectedType.HasValue)
+                queryParams += $"&type={selectedType.Value}";
+
+            pagedResult = await Http.GetFromJsonAsync<PagedResultDto>($"api/services{queryParams}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load services. Please try again.";
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void HandleSearchKeyUp()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+
+        searchDebounceTimer = new System.Timers.Timer(500);
+        searchDebounceTimer.Elapsed += async (sender, e) =>
+        {
+            searchDebounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                currentPage = 1;
+                await LoadServices();
+                StateHasChanged();
+            });
+        };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
+        currentPage = 1;
+        await LoadServices();
+    }
+
+    private async Task FilterByType(int? type)
+    {
+        selectedType = type;
+        currentPage = 1;
+        await LoadServices();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= (pagedResult?.TotalPages ?? 1))
+        {
+            currentPage = page;
+            await LoadServices();
+        }
+    }
+
+    private int GetStartPage()
+    {
+        const int maxVisible = 5;
+        var half = maxVisible / 2;
+        var start = Math.Max(1, currentPage - half);
+        var end = Math.Min(pagedResult?.TotalPages ?? 1, start + maxVisible - 1);
+        
+        if (end - start < maxVisible - 1)
+            start = Math.Max(1, end - maxVisible + 1);
+        
+        return start;
+    }
+
+    private int GetEndPage()
+    {
+        const int maxVisible = 5;
+        return Math.Min(pagedResult?.TotalPages ?? 1, GetStartPage() + maxVisible - 1);
+    }
+
+    private void NavigateToCreate() => Navigation.NavigateTo("/admin/services/create");
+    private void NavigateToEdit(long id) => Navigation.NavigateTo($"/admin/services/edit/{id}");
+    
+    private async Task ShowDeleteConfirm(long id)
+    {
+        await DeleteService(id);
+    }
+
+    private async Task DeleteService(long id)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"api/services/{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadServices();
+                ToastService.ShowSuccess("Service deleted successfully!");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to delete: {ex.Message}");
+        }
+    }
+
+    private async Task ToggleServiceStatus(long id)
+    {
+        try
+        {
+            var response = await Http.PutAsync($"api/services/{id}/toggle-status", null);
+            if (response.IsSuccessStatusCode)
+                await LoadServices();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to toggle: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Dispose();
+    }
+
+    public class PagedResultDto
+    {
+        public List<ServiceDto> Items { get; set; } = new();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalCount { get; set; }
+        public int TotalPages { get; set; }
+        public bool HasPrevious { get; set; }
+        public bool HasNext { get; set; }
+    }
+}

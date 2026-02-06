@@ -6,3 +6,10 @@ public interface IEmailService
     Task SendApplicationStatusUpdateAsync(string email, string applicationId, string status, CancellationToken cancellationToken = default);
     Task SendEquipmentAssignmentAsync(string email, string equipmentName, CancellationToken cancellationToken = default);
 }
+
+
+
+
+
+
+

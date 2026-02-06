@@ -5,7 +5,8 @@ public record EquipmentDto(
     string Name,
     string EquipmentCode,
     string Category,
-    bool IsAvailable
+    bool IsAvailable,
+    string Condition
 );
 
 public record EquipmentAssignmentDto(
@@ -19,3 +20,10 @@ public record EquipmentAssignmentDto(
     string? AdminNotes,
     string? ApplicantResponse
 );
+
+
+
+
+
+
+

@@ -2,6 +2,8 @@ namespace Application.Features.Applications.Queries;
 
 using MediatR;
 using Application.Common.Models;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
 
@@ -30,16 +32,20 @@ public class GetMyApplicationsQueryHandler(
             var submissionDtos = appWithSubmissions!.Submissions.Select(s =>
             {
                 var step = service.Steps.FirstOrDefault(st => st.Id == s.StepId);
-                return new StepSubmissionDto(
+                return new Application.Common.Models.StepSubmissionDto(
                     s.Id,
                     s.StepId,
+                    step?.Order ?? 0,
                     step?.Name ?? "Unknown",
-                    s.SubmissionVersion,
                     s.FormData,
-                    s.GetFilePaths(),
                     s.Status.ToString(),
                     s.CreatedAt,
-                    s.RejectionReason
+                    s.RejectionReason,
+                    s.Documents.Select(d => new Application.Common.Models.DocumentDto(
+                        d.UserDocument.Id,
+                        d.UserDocument.OriginalFileName,
+                        d.UserDocument.FilePath
+                    )).ToList()
                 );
             }).ToList();
 

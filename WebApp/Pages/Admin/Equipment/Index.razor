@@ -1,0 +1,295 @@
+@page "/admin/equipment"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Equipment Management - Admin Panel</PageTitle>
+
+<div class="max-w-7xl mx-auto p-3 md:p-5">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold font-title text-gray-900">Equipment Management</h1>
+            <p class="text-xs md:text-sm text-gray-600 mt-0.5">Manage all university equipment</p>
+        </div>
+        <button class="flex items-center justify-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:opacity-90 transition-opacity" @onclick="NavigateToCreate">
+            <span>+</span>
+            <span>Add Equipment</span>
+        </button>
+    </div>
+
+    <div class="space-y-3 mb-5">
+        <div class="relative">
+            <input type="text" 
+                   class="w-full px-3 py-2 pl-9 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none" 
+                   placeholder="Search equipment by name, code, or category..."
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   @onkeyup="HandleSearchKeyUp" />
+            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            @if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                <button class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm" @onclick="ClearSearch">✕</button>
+            }
+        </div>
+        
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedFilter == "all" ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="@(() => FilterEquipment("all"))">
+                All
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedFilter == "available" ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="@(() => FilterEquipment("available"))">
+                Available
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors @(selectedFilter == "overdue" ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200")" 
+                    @onclick="@(() => FilterEquipment("overdue"))">
+                Overdue
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <Loader Message="Loading equipment..." />
+    }
+    else if (errorMessage != null)
+    {
+        <div class="text-center py-10 bg-red-50 rounded-lg border border-red-100">
+            <div class="text-3xl mb-2">⚠</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1">Something went wrong</h3>
+            <p class="text-xs text-gray-600 mb-3">@errorMessage</p>
+            <button class="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300" @onclick="LoadEquipment">Retry</button>
+        </div>
+    }
+    else if (pagedResult == null || !pagedResult.Items.Any())
+    {
+        <div class="text-center py-10 bg-gray-50 rounded-lg">
+            <div class="text-3xl mb-2">📦</div>
+            <h3 class="text-base font-semibold text-gray-900 mb-1">No equipment found</h3>
+            <p class="text-xs text-gray-600 mb-3">@(searchTerm != null ? "Try different search terms" : "Add your first equipment")</p>
+            @if (searchTerm == null)
+            {
+                <button class="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:opacity-90" @onclick="NavigateToCreate">Add Equipment</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="space-y-2 mb-5">
+            @foreach (var equipment in pagedResult.Items)
+            {
+                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden transition-all hover:shadow-md">
+                    <div class="p-4 cursor-pointer" @onclick="@(() => ToggleExpand(equipment.Id))">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3 class="text-base font-semibold text-gray-900 truncate">@equipment.Name</h3>
+                                    @if (equipment.IsAvailable)
+                                    {
+                                        <span class="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded-full">Available</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="px-2 py-0.5 bg-red-100 text-red-800 text-xs font-medium rounded-full">Not Available</span>
+                                    }
+                                    @if (equipment.IsOverdue)
+                                    {
+                                        <span class="px-2 py-0.5 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">Overdue</span>
+                                    }
+                                    <span class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-full">@equipment.Condition</span>
+                                </div>
+                                <div class="flex gap-4 text-sm text-gray-600 mb-1">
+                                    <span><strong>Code:</strong> @equipment.EquipmentCode</span>
+                                    <span><strong>Category:</strong> @equipment.Category</span>
+                                    @if (equipment.ExpectedReturnDate.HasValue)
+                                    {
+                                        <span><strong>Return:</strong> @equipment.ExpectedReturnDate.Value.ToString("MMM dd, yyyy")</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(equipment.Description))
+                                {
+                                    <p class="text-xs text-gray-500 truncate">@equipment.Description</p>
+                                }
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50" @onclick:stopPropagation @onclick="@(() => NavigateToEdit(equipment.Id))">
+                                    Edit
+                                </button>
+                                <button class="px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50" @onclick:stopPropagation @onclick="@(() => DeleteEquipment(equipment.Id))">
+                                    Delete
+                                </button>
+                                <span class="text-gray-400 text-sm">@(expandedId == equipment.Id ? "▲" : "▼")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (expandedId == equipment.Id)
+                    {
+                        <div class="border-t border-gray-200 bg-gray-50 p-4">
+                            <p class="text-sm text-gray-600">Assignment history will be shown here...</p>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (pagedResult.TotalPages > 1)
+        {
+            <Pagination 
+                CurrentPage="@pagedResult.Page"
+                TotalPages="@pagedResult.TotalPages"
+                TotalCount="@pagedResult.TotalCount"
+                PageSize="@pagedResult.PageSize"
+                OnPageChange="ChangePage" />
+        }
+    }
+</div>
+
+@code {
+    private PagedResultDto? pagedResult;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string searchTerm = string.Empty;
+    private string selectedFilter = "all";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private System.Timers.Timer? searchDebounceTimer;
+    private long? expandedId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEquipment();
+    }
+
+    private async Task LoadEquipment()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            
+            var queryParams = $"?page={currentPage}&pageSize={pageSize}";
+            
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                queryParams += $"&search={Uri.EscapeDataString(searchTerm)}";
+            
+            if (selectedFilter == "available")
+                queryParams += "&available=true";
+            else if (selectedFilter == "overdue")
+                queryParams += "&overdue=true";
+
+            pagedResult = await Http.GetFromJsonAsync<PagedResultDto>($"api/equipment{queryParams}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load equipment. Please try again.";
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void HandleSearchKeyUp()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+
+        searchDebounceTimer = new System.Timers.Timer(500);
+        searchDebounceTimer.Elapsed += async (sender, e) =>
+        {
+            searchDebounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                currentPage = 1;
+                await LoadEquipment();
+                StateHasChanged();
+            });
+        };
+        searchDebounceTimer.Start();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
+        currentPage = 1;
+        await LoadEquipment();
+    }
+
+    private async Task FilterEquipment(string filter)
+    {
+        selectedFilter = filter;
+        currentPage = 1;
+        await LoadEquipment();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= (pagedResult?.TotalPages ?? 1))
+        {
+            currentPage = page;
+            await LoadEquipment();
+        }
+    }
+
+    private void ToggleExpand(long equipmentId)
+    {
+        expandedId = expandedId == equipmentId ? null : equipmentId;
+    }
+
+    private void NavigateToCreate() => Navigation.NavigateTo("/admin/equipment/create");
+    private void NavigateToEdit(long id) => Navigation.NavigateTo($"/admin/equipment/edit/{id}");
+
+    private async Task DeleteEquipment(long id)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"api/equipment/{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Equipment deleted successfully!");
+                await LoadEquipment();
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ToastService.ShowError($"Failed to delete: {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to delete: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        searchDebounceTimer?.Dispose();
+    }
+
+    public class PagedResultDto
+    {
+        public List<EquipmentDto> Items { get; set; } = new();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalCount { get; set; }
+        public int TotalPages { get; set; }
+    }
+
+    public class EquipmentDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string EquipmentCode { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsAvailable { get; set; }
+        public string Condition { get; set; } = string.Empty;
+        public long? CurrentApplicationId { get; set; }
+        public bool IsOverdue { get; set; }
+        public DateTime? ExpectedReturnDate { get; set; }
+    }
+}

@@ -2,6 +2,8 @@ namespace Application.Features.Services.Commands;
 
 using MediatR;
 using Application.Common.Models;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
 
@@ -25,3 +27,10 @@ public class UpdateServiceDescriptionCommandHandler(
         return Result.Success();
     }
 }
+
+
+
+
+
+
+

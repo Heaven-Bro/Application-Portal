@@ -52,4 +52,12 @@ public class UserRepository : IUserRepository
     {
         return await _context.SaveChangesAsync(cancellationToken);
     }
+    public async Task<List<User>> SearchUsersAsync(string searchTerm, CancellationToken cancellationToken = default)
+    {
+        var search = searchTerm.ToLower();
+        return await _context.Users
+            .Where(u => u.Username.ToLower().Contains(search) || u.Email.ToLower().Contains(search))
+            .ToListAsync(cancellationToken);
+    }
+
 }

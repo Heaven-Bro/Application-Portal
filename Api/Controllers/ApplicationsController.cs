@@ -1,33 +1,52 @@
 namespace Api.Controllers;
 
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Application.Features.Applications.Commands;
 using Application.Features.Applications.Queries;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
-public class ApplicationsController(IMediator mediator) : ControllerBase
+[Authorize(Roles = "Applicant")]
+public class ApplicationController : ControllerBase
 {
-    [HttpGet("my")]
+    private readonly IMediator _mediator;
+
+    public ApplicationController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    [HttpGet("my-applications")]
     public async Task<IActionResult> GetMyApplications()
     {
         var query = new GetMyApplicationsQuery();
-        var result = await mediator.Send(query);
-
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.Error });
-
-        return Ok(result.Value);
+        var result = await _mediator.Send(query);
+        
+        if (result.IsSuccess)
+            return Ok(result.Value);
+        
+        return BadRequest(new { message = result.Error });
     }
 
-    [HttpPost]
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetApplicationDetails(long id)
+    {
+        var query = new GetApplicationDetailsQuery(id);
+        var result = await _mediator.Send(query);
+        
+        if (result.IsSuccess)
+            return Ok(result.Value);
+        
+        return BadRequest(new { message = result.Error });
+    }
+
+    [HttpPost("create")]
     public async Task<IActionResult> CreateApplication([FromBody] CreateApplicationRequest request)
     {
         var command = new CreateApplicationCommand(request.ServiceId);
-        var result = await mediator.Send(command);
+        var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
             return BadRequest(new { error = result.Error });
@@ -35,51 +54,29 @@ public class ApplicationsController(IMediator mediator) : ControllerBase
         return Ok(new { applicationId = result.Value });
     }
 
-    [HttpPost("{applicationId}/steps/{stepId}/submit")]
-    public async Task<IActionResult> SubmitStep(long applicationId, long stepId, [FromBody] SubmitStepRequest request)
+    [HttpPost("{id}/submit-step")]
+    public async Task<IActionResult> SubmitStep(long id, [FromBody] SubmitStepRequest request)
     {
         var command = new SubmitStepCommand(
-            applicationId,
-            stepId,
+            id,
+            request.StepId,
             request.FormData,
-            request.FilePaths ?? new List<string>()
+            request.DocumentIds ?? new List<long>()
         );
-
-        var result = await mediator.Send(command);
-
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.Error });
-
-        return Ok(new { submissionId = result.Value });
-    }
-
-    [HttpPut("submissions/{submissionId}/approve")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ApproveStep(long submissionId)
-    {
-        var command = new ApproveStepCommand(submissionId);
-        var result = await mediator.Send(command);
-
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.Error });
-
-        return Ok(new { message = "Step approved successfully" });
-    }
-
-    [HttpPut("submissions/{submissionId}/reject")]
-    [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> RejectStep(long submissionId, [FromBody] RejectStepRequest request)
-    {
-        var command = new RejectStepCommand(submissionId, request.Reason);
-        var result = await mediator.Send(command);
-
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.Error });
-
-        return Ok(new { message = "Step rejected successfully" });
+        
+        var result = await _mediator.Send(command);
+        
+        if (result.IsSuccess)
+            return Ok(new { submissionId = result.Value });
+        
+        return BadRequest(new { message = result.Error });
     }
 }
 
 public record CreateApplicationRequest(long ServiceId);
-public record SubmitStepRequest(string? FormData, List<string>? FilePaths);
-public record RejectStepRequest(string Reason);
+
+public record SubmitStepRequest(
+    long StepId,
+    string? FormData,
+    List<long>? DocumentIds
+);

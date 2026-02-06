@@ -1,0 +1,72 @@
+@using Shared.Contracts.Services
+@using Shared.Contracts.Common
+
+<div class="service-card @(Service.IsActive ? "" : "inactive")">
+    <div class="service-card-header">
+        <div class="service-type-badge @GetServiceTypeCss()">
+            @GetServiceTypeIcon() @Service.ServiceType
+        </div>
+        <div class="service-status">
+            @if (Service.IsActive)
+            {
+                <span class="status-badge active">Active</span>
+            }
+            else
+            {
+                <span class="status-badge inactive">Inactive</span>
+            }
+        </div>
+    </div>
+
+    <div class="service-card-body">
+        <h3 class="service-title font-title">@Service.Name</h3>
+        <p class="service-description font-text">@Service.Description</p>
+        
+        <div class="service-steps-info">
+            <i class="icon">📋</i>
+            <span class="font-text">@Service.Steps.Count Step@(Service.Steps.Count != 1 ? "s" : "")</span>
+        </div>
+    </div>
+
+    <div class="service-card-actions">
+        <button class="btn-action edit" @onclick="OnEdit" title="Edit">
+            <i>✏️</i> Edit
+        </button>
+        <button class="btn-action toggle" @onclick="OnToggleActive" title="Toggle Status">
+            <i>@(Service.IsActive ? "🔒" : "🔓")</i> @(Service.IsActive ? "Deactivate" : "Activate")
+        </button>
+        <button class="btn-action delete" @onclick="OnDelete" title="Delete">
+            <i>🗑️</i> Delete
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ServiceDto Service { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnDelete { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleActive { get; set; }
+
+    private string GetServiceTypeCss() => Service.ServiceType switch
+    {
+        "ChairmanAppointment" => "type-chairman",
+        "EquipmentLoan" => "type-equipment",
+        "GeneralApplication" => "type-general",
+        _ => "type-default"
+    };
+
+    private string GetServiceTypeIcon() => Service.ServiceType switch
+    {
+        "ChairmanAppointment" => "👔",
+        "EquipmentLoan" => "🔧",
+        "GeneralApplication" => "📝",
+        _ => "📋"
+    };
+}

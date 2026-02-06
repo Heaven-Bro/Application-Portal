@@ -3,7 +3,6 @@ namespace Infrastructure.Services.Auth;
 using Application.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 
 public class CurrentUserService : ICurrentUserService
 {
@@ -18,12 +17,12 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
-            var subClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            return subClaim != null ? long.Parse(subClaim) : 0;
+            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return userIdClaim != null && long.TryParse(userIdClaim, out var userId) ? userId : 0;
         }
     }
 
-    public string Email => _httpContextAccessor.HttpContext?.User?.FindFirst(JwtRegisteredClaimNames.Email)?.Value ?? string.Empty;
+    public string Email => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
 
     public string Role => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
 

@@ -2,6 +2,8 @@ namespace Application.Features.Auth.Commands;
 
 using MediatR;
 using Application.Common.Models;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
 using Domain.Repositories;
 
 public record VerifyEmailCommand(string Email, string Token) : IRequest<Result>;
@@ -24,3 +26,10 @@ public class VerifyEmailCommandHandler(
         return Result.Success();
     }
 }
+
+
+
+
+
+
+

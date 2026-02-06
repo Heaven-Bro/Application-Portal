@@ -16,11 +16,19 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.Property(s => s.Name).IsRequired().HasMaxLength(255);
         builder.Property(s => s.Description).HasMaxLength(1000);
 
+        builder.Property(s => s.ServiceType)
+            .IsRequired()
+            .HasConversion<int>();
+
         builder.HasMany(s => s.Steps)
             .WithOne()
             .HasForeignKey(ss => ss.ServiceId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(s => new { s.IsActive, s.ServiceVersion });
+        builder.HasIndex(s => new { s.IsActive, s.ServiceType });
+
+        builder.Property(s => s.Version).IsConcurrencyToken();
+        builder.Property(s => s.CreatedBy).IsRequired();
+        builder.Property(s => s.CreatedAt).IsRequired();
     }
 }

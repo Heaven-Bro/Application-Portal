@@ -1,0 +1,266 @@
+@page "/my-applications"
+@attribute [Authorize(Roles = "Applicant")]
+@using Shared.Contracts.Services
+@using Shared.Contracts.Common
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>My Applications</PageTitle>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+    <div class="mb-6 md:mb-8">
+        <h1 class="text-2xl md:text-4xl font-bold text-gray-900 mb-2">My Applications</h1>
+        <p class="text-sm md:text-base text-gray-600">Track all your service applications</p>
+    </div>
+
+    <div class="mb-6 flex flex-wrap gap-2">
+        <button @onclick="() => SetFilter(null)" 
+                class="@GetFilterButtonClass(null)">
+            All (@(applications?.Count ?? 0))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.Draft)" 
+                class="@GetFilterButtonClass(ApplicationStatus.Draft)">
+            Draft (@GetStatusCount(ApplicationStatus.Draft))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.Submitted)" 
+                class="@GetFilterButtonClass(ApplicationStatus.Submitted)">
+            Submitted (@GetStatusCount(ApplicationStatus.Submitted))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.InReview)" 
+                class="@GetFilterButtonClass(ApplicationStatus.InReview)">
+            In Review (@GetStatusCount(ApplicationStatus.InReview))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.Approved)" 
+                class="@GetFilterButtonClass(ApplicationStatus.Approved)">
+            Approved (@GetStatusCount(ApplicationStatus.Approved))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.Rejected)" 
+                class="@GetFilterButtonClass(ApplicationStatus.Rejected)">
+            Rejected (@GetStatusCount(ApplicationStatus.Rejected))
+        </button>
+        <button @onclick="() => SetFilter(ApplicationStatus.Completed)" 
+                class="@GetFilterButtonClass(ApplicationStatus.Completed)">
+            Completed (@GetStatusCount(ApplicationStatus.Completed))
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="flex justify-center items-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 border-t-[var(--primary)]"></div>
+        </div>
+    }
+    else if (filteredApplications == null || !filteredApplications.Any())
+    {
+        <div class="text-center py-20">
+            <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p class="text-gray-500 text-lg mb-2">No applications found</p>
+            <p class="text-sm text-gray-400 mb-6">Start applying for services to see them here</p>
+            <button @onclick='() => Navigation.NavigateTo("/")'
+                    class="inline-flex items-center gap-2 px-6 py-2.5 bg-[var(--primary)] text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Browse Services
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-4">
+            @foreach (var app in filteredApplications)
+            {
+                var status = ParseStatus(app.Status);
+                
+                <div class="bg-white rounded-xl border-2 border-gray-100 hover:border-[var(--primary)] transition-all duration-300 overflow-hidden">
+                    <div class="p-5 md:p-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div class="flex-1">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div class="flex-1">
+                                        <h3 class="text-lg md:text-xl font-semibold text-gray-900 mb-1">@app.ServiceName</h3>
+                                        <p class="text-sm text-gray-500">Application #@app.Id</p>
+                                    </div>
+                                    <span class="@GetStatusBadgeClass(status) ml-4">
+                                        @GetStatusText(status)
+                                    </span>
+                                </div>
+                                
+                                <div class="flex flex-wrap items-center gap-4 text-sm text-gray-600 mt-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span>@app.CreatedAt.ToString("MMM dd, yyyy")</span>
+                                    </div>
+                                    
+                                    @if (status == ApplicationStatus.Approved && app.ScheduledDateTime.HasValue)
+                                    {
+                                        <div class="flex items-center gap-1.5 text-green-600 font-medium">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>@app.ScheduledDateTime.Value.ToString("MMM dd, yyyy HH:mm")</span>
+                                        </div>
+                                    }
+                                    
+                                    @if (status == ApplicationStatus.Completed && app.CompletedAt.HasValue)
+                                    {
+                                        <div class="flex items-center gap-1.5 text-blue-600">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>Completed: @app.CompletedAt.Value.ToString("MMM dd, yyyy")</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-2">
+                                <button @onclick="() => ViewApplication(app.Id)"
+                                        class="px-4 py-2 bg-white border-2 border-[var(--primary)] text-[var(--primary)] rounded-lg font-semibold text-sm hover:bg-[var(--primary)] hover:text-white transition-all duration-200 flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ApplicationListDto>? applications;
+    private List<ApplicationListDto>? filteredApplications;
+    private ApplicationStatus? selectedFilter = null;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplications();
+    }
+
+    private async Task LoadApplications()
+    {
+        try
+        {
+            isLoading = true;
+            applications = await Http.GetFromJsonAsync<List<ApplicationListDto>>("api/Application/my-applications");
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load applications: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetFilter(ApplicationStatus? status)
+    {
+        selectedFilter = status;
+        ApplyFilter();
+    }
+
+		private void ApplyFilter()
+		{
+				if (applications == null)
+				{
+						filteredApplications = null;
+						return;
+				}
+
+				filteredApplications = selectedFilter.HasValue
+						? applications.Where(a => ParseStatus(a.Status) == selectedFilter.Value).OrderByDescending(a => a.CreatedAt).ToList()
+						: applications.OrderByDescending(a => a.CreatedAt).ToList();
+		}
+
+		private int GetStatusCount(ApplicationStatus status)
+		{
+				return applications?.Count(a => ParseStatus(a.Status) == status) ?? 0;
+		}
+
+		private ApplicationStatus ParseStatus(string status)
+		{
+				return Enum.TryParse<ApplicationStatus>(status, true, out var result) ? result : ApplicationStatus.Draft;
+		}
+
+
+
+
+
+    private void ViewApplication(long applicationId)
+    {
+        Navigation.NavigateTo($"/apply/{applicationId}");
+    }
+
+    private string GetFilterButtonClass(ApplicationStatus? status)
+    {
+        var baseClass = "px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200";
+        return selectedFilter == status
+            ? $"{baseClass} bg-[var(--primary)] text-white"
+            : $"{baseClass} bg-gray-100 text-gray-700 hover:bg-gray-200";
+    }
+
+    private string GetStatusBadgeClass(ApplicationStatus status)
+    {
+        var baseClass = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap";
+        return status switch
+        {
+            ApplicationStatus.Draft => $"{baseClass} bg-gray-100 text-gray-700",
+            ApplicationStatus.Submitted => $"{baseClass} bg-blue-100 text-blue-700",
+            ApplicationStatus.InReview => $"{baseClass} bg-yellow-100 text-yellow-700",
+            ApplicationStatus.Approved => $"{baseClass} bg-green-100 text-green-700",
+            ApplicationStatus.Rejected => $"{baseClass} bg-red-100 text-red-700",
+            ApplicationStatus.Completed => $"{baseClass} bg-purple-100 text-purple-700",
+            _ => $"{baseClass} bg-gray-100 text-gray-700"
+        };
+    }
+
+    private string GetStatusText(ApplicationStatus status)
+    {
+        return status switch
+        {
+            ApplicationStatus.Draft => "Draft",
+            ApplicationStatus.Submitted => "Submitted",
+            ApplicationStatus.InReview => "In Review",
+            ApplicationStatus.Approved => "Approved",
+            ApplicationStatus.Rejected => "Rejected",
+            ApplicationStatus.Completed => "Completed",
+            _ => "Unknown"
+        };
+    }
+
+    public enum ApplicationStatus
+    {
+        Draft = 0,
+        Submitted = 1,
+        InReview = 2,
+        Approved = 3,
+        Rejected = 4,
+        Completed = 5
+    }
+
+		
+
+		public class ApplicationListDto
+		{
+				public long Id { get; set; }
+				public string ServiceName { get; set; } = string.Empty;
+				public string Status { get; set; } = string.Empty;
+				public DateTime CreatedAt { get; set; }
+				public DateTime? ScheduledDateTime { get; set; }
+				public DateTime? CompletedAt { get; set; }
+		}
+
+}

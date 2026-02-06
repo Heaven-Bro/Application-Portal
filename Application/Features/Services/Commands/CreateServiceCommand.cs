@@ -1,49 +1,78 @@
 namespace Application.Features.Services.Commands;
 
-using MediatR;
 using Application.Common.Models;
-using Application.Common.Interfaces;
+using Shared.Contracts.Services;
+using Shared.Contracts.Common;
+using Domain.Common.Enums;
 using Domain.Repositories;
 using Domain.Services;
+using MediatR;
 
 public record CreateServiceCommand(
     string Name,
     string Description,
-    List<CreateServiceStepDto> Steps
+    ServiceType ServiceType,
+    List<CreateServiceStepDto> Steps,
+    long CreatedBy
 ) : IRequest<Result<long>>;
 
 public record CreateServiceStepDto(
     string Name,
-    string Description,
     int Order,
     bool RequiresFileUpload,
     bool RequiresTextInput,
-    bool IsEquipmentAssignment
+    string? Instructions,
+    string? DownloadableFormUrl,
+    bool IsOptional,
+    string? UploadConfig,
+     bool RequiresApproval
 );
 
-public class CreateServiceCommandHandler(
-    IServiceRepository serviceRepository,
-    ICurrentUserService currentUser) : IRequestHandler<CreateServiceCommand, Result<long>>
+public class CreateServiceCommandHandler : IRequestHandler<CreateServiceCommand, Result<long>>
 {
+    private readonly IServiceRepository _serviceRepository;
+
+    public CreateServiceCommandHandler(IServiceRepository serviceRepository)
+    {
+        _serviceRepository = serviceRepository;
+    }
+
+
     public async Task<Result<long>> Handle(CreateServiceCommand request, CancellationToken cancellationToken)
     {
-        var service = Service.Create(request.Name, request.Description, currentUser.UserId);
+        var service = Service.Create(
+            request.Name,
+            request.Description,
+            request.ServiceType,
+            request.CreatedBy
+        );
 
-        foreach (var step in request.Steps.OrderBy(s => s.Order))
+        foreach (var stepDto in request.Steps)
         {
             service.AddStep(
-                step.Name,
-                step.Description,
-                step.Order,
-                step.RequiresFileUpload,
-                step.RequiresTextInput,
-                step.IsEquipmentAssignment
+                stepDto.Name,
+                stepDto.Order,
+                stepDto.RequiresFileUpload,
+                stepDto.RequiresTextInput,
+                stepDto.Instructions,
+                stepDto.DownloadableFormUrl,
+                stepDto.IsOptional,
+                stepDto.UploadConfig,
+                stepDto.RequiresApproval
             );
         }
 
-        await serviceRepository.AddAsync(service, cancellationToken);
-        await serviceRepository.SaveChangesAsync(cancellationToken);
+        await _serviceRepository.AddAsync(service, cancellationToken);
+        await _serviceRepository.SaveChangesAsync(cancellationToken);
 
         return Result<long>.Success(service.Id);
     }
+
 }
+
+
+
+
+
+
+
