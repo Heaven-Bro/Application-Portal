@@ -15,6 +15,7 @@ public record ServiceStepDto(
     int Order,
     bool RequiresFileUpload,
     bool RequiresTextInput,
+    bool RequiresApproval,
     string? Instructions,
     string? DownloadableFormUrl,
     UploadConfigDto? UploadConfig

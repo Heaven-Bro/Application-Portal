@@ -1,59 +1,308 @@
 @page "/admin"
 @layout AdminLayout
 @attribute [Authorize(Roles = "Admin")]
-@using WebApp.Components.UI
+@inject HttpClient Http
+@inject IToastService ToastService
 
 <PageTitle>Dashboard - Admin Panel</PageTitle>
 
-<div class="space-y-6">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-            Title="Total Pending"
-            Value="24"
-            Icon="clock"
-            Color="yellow"
-            Trend="+3 from yesterday" />
-        
-        <StatCard 
-            Title="Total Paid"
-            Value="12"
-            Icon="check-circle"
-            Color="green"
-            Trend="+5 this week" />
-        
-        <StatCard 
-            Title="Total Users"
-            Value="156"
-            Icon="users"
-            Color="blue"
-            Trend="+8 this month" />
+@if (isLoading)
+{
+    <div class="flex items-center justify-center min-h-[50vh]">
+        <div class="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-primary"></div>
     </div>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+        @loadError
+    </div>
+}
+else
+{
+    <div class="space-y-6">
+        <div class="rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 p-5 text-white shadow-lg">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-[0.2em] text-gray-300">Admin Dashboard</p>
+                    <h1 class="text-2xl font-bold mt-1">System Overview</h1>
+                    <p class="text-sm text-gray-200 mt-1">Live snapshot of applications, users, and equipment.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <p class="text-xs text-gray-300">Last refreshed</p>
+                        <p class="text-sm font-semibold">@FormatBdDateTime(lastRefreshUtc)</p>
+                    </div>
+                    <button class="px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-xs font-semibold"
+                            @onclick="LoadDashboard">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ActivityLog 
-            Title="Payment Log"
-            LogType="payment"
-            Items="@_paymentLogs" />
-        
-        <ActivityLog 
-            Title="Application Log"
-            LogType="application"
-            Items="@_applicationLogs" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p class="text-xs text-gray-500">Total Applications</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">@totalApplications</p>
+                <p class="text-xs text-gray-500 mt-1">@pendingApplications pending review</p>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p class="text-xs text-gray-500">In Review</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">@inReviewApplications</p>
+                <p class="text-xs text-gray-500 mt-1">@returnRequestsCount return requests</p>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p class="text-xs text-gray-500">Active Users</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">@activeUsers</p>
+                <p class="text-xs text-gray-500 mt-1">@totalUsers total users</p>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p class="text-xs text-gray-500">Equipment</p>
+                <p class="text-2xl font-bold text-gray-900 mt-1">@availableEquipment</p>
+                <p class="text-xs text-gray-500 mt-1">available of @totalEquipment</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-2">
+                <h2 class="text-sm font-semibold text-gray-900">System Info</h2>
+                <div class="flex items-center justify-between text-xs text-gray-600">
+                    <span>Bangladesh Time</span>
+                    <span class="font-semibold text-gray-900">@FormatBdDateTime(DateTime.UtcNow)</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-600">
+                    <span>Services</span>
+                    <span class="font-semibold text-gray-900">@servicesCount</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-600">
+                    <span>Unread Notifications</span>
+                    <span class="font-semibold text-gray-900">@unreadNotifications</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-600">
+                    <span>Overdue Equipment</span>
+                    <span class="font-semibold text-gray-900">@overdueEquipment</span>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-gray-900">Recent Applications</h2>
+                    <a href="/admin/applications" class="text-xs text-primary font-semibold">View all</a>
+                </div>
+
+                @if (!recentApplications.Any())
+                {
+                    <div class="text-xs text-gray-500 py-6 text-center">No recent applications found.</div>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var app in recentApplications)
+                        {
+                            <div class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-gray-900 truncate">@app.ServiceName</p>
+                                    <p class="text-xs text-gray-500 truncate">@app.ApplicantName • @app.ApplicantEmail</p>
+                                    <p class="text-[11px] text-gray-500 mt-1">@FormatBdDateTime(app.CreatedAt)</p>
+                                </div>
+                                <div class="flex flex-col items-end gap-1 shrink-0">
+                                    <span class="@GetStatusBadge(app.Status)">@app.Status</span>
+                                    <span class="text-[11px] text-gray-500">@FormatServiceType(app.ServiceType)</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     </div>
-</div>
+}
 
 @code {
-    private List<ActivityLog.ActivityLogItem> _paymentLogs = new()
+    private bool isLoading = true;
+    private string? loadError;
+    private DateTime lastRefreshUtc = DateTime.UtcNow;
+
+    private int totalApplications;
+    private int pendingApplications;
+    private int inReviewApplications;
+    private int approvedApplications;
+    private int rejectedApplications;
+    private int completedApplications;
+    private int returnRequestsCount;
+    private int totalUsers;
+    private int activeUsers;
+    private int totalEquipment;
+    private int availableEquipment;
+    private int overdueEquipment;
+    private int servicesCount;
+    private int unreadNotifications;
+
+    private List<AdminApplicationListItemDto> recentApplications = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        new("Mahmud Ali", "paid ৳500 for Transcript Request", DateTime.Now.AddHours(-2)),
-        new("Jessica Sameh", "paid ৳300 for Certificate Request", DateTime.Now.AddHours(-5)),
-        new("Ahmed Khan", "paid ৳450 for Course Completion", DateTime.Now.AddDays(-1))
+        await LoadDashboard();
+    }
+
+    private async Task LoadDashboard()
+    {
+        try
+        {
+            isLoading = true;
+            loadError = null;
+
+            var applicationsTask = Http.GetFromJsonAsync<PaginatedResult<AdminApplicationListItemDto>>(
+                "api/admin/applications?page=1&pageSize=1000");
+            var usersTask = Http.GetFromJsonAsync<List<UserRow>>("api/users");
+            var equipmentTask = Http.GetFromJsonAsync<PagedResult<EquipmentDto>>(
+                "api/equipment?page=1&pageSize=1000");
+            var servicesTask = Http.GetFromJsonAsync<PagedResult<ServiceDto>>(
+                "api/services?page=1&pageSize=1000");
+            var notificationsTask = Http.GetFromJsonAsync<UnreadCountResponse>(
+                "api/notifications/unread-count");
+
+            var applicationsResult = await applicationsTask;
+            var usersResult = await usersTask;
+            var equipmentResult = await equipmentTask;
+            var servicesResult = await servicesTask;
+            var notificationsResult = await notificationsTask;
+
+            var applications = applicationsResult?.Items ?? new();
+            totalApplications = applicationsResult?.TotalCount ?? applications.Count;
+            pendingApplications = applications.Count(a => a.Status is "Submitted" or "Draft");
+            inReviewApplications = applications.Count(a => a.Status == "InReview");
+            approvedApplications = applications.Count(a => a.Status == "Approved");
+            rejectedApplications = applications.Count(a => a.Status == "Rejected");
+            completedApplications = applications.Count(a => a.Status == "Completed");
+            returnRequestsCount = applications.Sum(a => a.PendingReturnCount);
+
+            recentApplications = applications
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(6)
+                .ToList();
+
+            var users = usersResult ?? new();
+            totalUsers = users.Count;
+            activeUsers = users.Count(u => u.Status == "Active");
+
+            var equipment = equipmentResult?.Items ?? new();
+            totalEquipment = equipmentResult?.TotalCount ?? equipment.Count;
+            availableEquipment = equipment.Count(e => e.IsAvailable);
+            overdueEquipment = equipment.Count(e => e.IsOverdue);
+
+            servicesCount = servicesResult?.TotalCount ?? servicesResult?.Items.Count ?? 0;
+            unreadNotifications = notificationsResult?.Count ?? 0;
+
+            lastRefreshUtc = DateTime.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Failed to load dashboard data: {ex.Message}";
+            ToastService.ShowError("Failed to load dashboard");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static TimeZoneInfo? _bangladeshTimeZone;
+
+    private static TimeZoneInfo GetBangladeshTimeZone()
+    {
+        if (_bangladeshTimeZone != null)
+            return _bangladeshTimeZone;
+
+        var timeZoneIds = new[] { "Bangladesh Standard Time", "Asia/Dhaka" };
+        foreach (var id in timeZoneIds)
+        {
+            try
+            {
+                _bangladeshTimeZone = TimeZoneInfo.FindSystemTimeZoneById(id);
+                return _bangladeshTimeZone;
+            }
+            catch
+            {
+            }
+        }
+
+        _bangladeshTimeZone = TimeZoneInfo.Local;
+        return _bangladeshTimeZone;
+    }
+
+    private static string FormatBdDateTime(DateTime dateTime)
+    {
+        var utc = dateTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+            : dateTime.ToUniversalTime();
+        var tz = GetBangladeshTimeZone();
+        var local = TimeZoneInfo.ConvertTimeFromUtc(utc, tz);
+        return local.ToString("MMM dd, yyyy hh:mm tt");
+    }
+
+    private string GetStatusBadge(string status) => status switch
+    {
+        "Draft" => "px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700",
+        "Submitted" => "px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700",
+        "InReview" => "px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700",
+        "Approved" => "px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700",
+        "Rejected" => "px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700",
+        "Completed" => "px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700",
+        _ => "px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700"
     };
 
-    private List<ActivityLog.ActivityLogItem> _applicationLogs = new()
+    private string FormatServiceType(string type) => type switch
     {
-        new("Mahmud Ali", "applied for Transcript Request", DateTime.Now.AddHours(-2)),
-        new("Jessica Sameh", "applied for Certificate Request", DateTime.Now.AddHours(-5)),
-        new("Ahmed Khan", "applied for Course Completion", DateTime.Now.AddDays(-1))
+        "EquipmentLoan" => "Equipment Loan",
+        "GeneralApplication" => "General",
+        "ChairmanAppointment" => "Chairman",
+        _ => type
     };
+
+    public class PaginatedResult<T>
+    {
+        public List<T> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+    }
+
+    public class PagedResult<T>
+    {
+        public List<T> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+    }
+
+    public class AdminApplicationListItemDto
+    {
+        public long Id { get; set; }
+        public string ServiceName { get; set; } = string.Empty;
+        public string ServiceType { get; set; } = string.Empty;
+        public string ApplicantName { get; set; } = string.Empty;
+        public string ApplicantEmail { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public int PendingReturnCount { get; set; }
+    }
+
+    public class UserRow
+    {
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class EquipmentDto
+    {
+        public bool IsAvailable { get; set; }
+        public bool IsOverdue { get; set; }
+    }
+
+    public class ServiceDto
+    {
+        public long Id { get; set; }
+    }
+
+    public class UnreadCountResponse
+    {
+        public int Count { get; set; }
+    }
 }

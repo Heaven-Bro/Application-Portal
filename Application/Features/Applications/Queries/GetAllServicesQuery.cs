@@ -33,6 +33,7 @@ public class GetAllServicesQueryHandler : IRequestHandler<GetAllServicesQuery, R
                 st.Order,
                 st.RequiresFileUpload,
                 st.RequiresTextInput,
+                st.RequiresApproval,
                 st.Instructions,
                 st.DownloadableFormUrl,
                 ParseUploadConfig(st.UploadConfig)

@@ -59,6 +59,7 @@ public class GetServicesPagedQueryHandler : IRequestHandler<GetServicesPagedQuer
                     step.Order,
                     step.RequiresFileUpload,
                     step.RequiresTextInput,
+                    step.RequiresApproval,
                     step.Instructions,
                     step.DownloadableFormUrl,
                     ParseUploadConfig(step.UploadConfig)

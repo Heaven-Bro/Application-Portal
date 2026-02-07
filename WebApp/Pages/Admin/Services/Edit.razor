@@ -176,6 +176,15 @@
                                                 Requires Text Input
                                             </label>
                                         </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <InputCheckbox id="@($"requiresApproval_{index}")"
+                                                          class="w-3.5 h-3.5 rounded border-gray-300"
+                                                          @bind-Value="step.RequiresApproval" />
+                                            <label for="@($"requiresApproval_{index}")" class="text-xs font-medium text-gray-700 cursor-pointer">
+                                                Requires Admin Approval
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             }
@@ -255,6 +264,7 @@
                     DownloadableFormLabel = "Download Form",
                     RequiresFileUpload = s.RequiresFileUpload,
                     RequiresTextInput = s.RequiresTextInput,
+                    RequiresApproval = s.RequiresApproval,
                     IsOptional = false,
                     FileUploadLabel = s.UploadConfig?.Label,
                     FileUploadInstructions = s.UploadConfig?.Instructions,
@@ -329,6 +339,7 @@
                     s.Order,
                     s.RequiresFileUpload,
                     s.RequiresTextInput,
+                    s.RequiresApproval,
                     s.Instructions,
                     s.DownloadableFormUrl,
                     s.IsOptional,
@@ -396,6 +407,7 @@
         public bool IsOptional { get; set; }
         public bool RequiresFileUpload { get; set; }
         public bool RequiresTextInput { get; set; }
+        public bool RequiresApproval { get; set; } = true;
         public string? Instructions { get; set; }
         public string? DownloadableFormUrl { get; set; }
         public string? DownloadableFormLabel { get; set; }
@@ -427,6 +439,7 @@
         public int Order { get; set; }
         public bool RequiresFileUpload { get; set; }
         public bool RequiresTextInput { get; set; }
+        public bool RequiresApproval { get; set; }
         public string? Instructions { get; set; }
         public string? DownloadableFormUrl { get; set; }
         public UploadConfigDto? UploadConfig { get; set; }

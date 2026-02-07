@@ -28,8 +28,8 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
 
         var assignments = await _assignmentRepository.GetByEquipmentIdAsync(equipment.Id, cancellationToken);
         assignments = assignments
-            .GroupBy(a => a.Id)
-            .Select(g => g.First())
+            .GroupBy(a => new { a.ApplicationId, a.AssignedAt })
+            .Select(g => g.OrderByDescending(x => x.Id).First())
             .ToList();
 
         bool IsActiveStatus(EquipmentAssignmentStatus status) => status is
