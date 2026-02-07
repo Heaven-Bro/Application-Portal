@@ -59,6 +59,13 @@ else
             </div>
         }
 
+        <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p class="text-xs font-semibold text-yellow-800 mb-1">Admin Notes</p>
+            <p class="text-xs text-yellow-900">
+                @(string.IsNullOrWhiteSpace(application.AdminNotes) ? "No notes from admin yet." : application.AdminNotes)
+            </p>
+        </div>
+
         <div class="bg-white rounded-lg border p-4 space-y-3">
             @foreach (var step in application.Steps)
             {
@@ -234,6 +241,138 @@ else
             }
         </div>
 
+        @if (IsEquipmentLoan())
+        {
+            <div class="bg-white rounded-lg border p-4">
+                <h2 class="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                    Assigned Equipment
+                </h2>
+                <p class="text-xs text-gray-500 mb-3">Request return here when you are ready. Admin will verify and confirm.</p>
+
+                @if (assignmentsLoading)
+                {
+                    <div class="text-sm text-gray-600">Loading assignments...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(assignmentsError))
+                {
+                    <div class="text-sm text-red-600">@assignmentsError</div>
+                }
+                else if (!equipmentAssignments.Any())
+                {
+                    <div class="text-sm text-gray-600">No equipment assigned yet.</div>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var assignment in equipmentAssignments)
+                        {
+                            var isOverdue = IsOverdue(assignment);
+                            if (!disputeResponses.ContainsKey(assignment.Id))
+                            {
+                                disputeResponses[assignment.Id] = string.Empty;
+                            }
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-semibold text-gray-900 truncate">@assignment.EquipmentName</p>
+                                        <p class="text-xs text-gray-500">@assignment.EquipmentCode</p>
+                                    </div>
+                                    <span class="@GetAssignmentStatusBadge(assignment.Status)">@GetAssignmentStatusLabel(assignment.Status)</span>
+                                </div>
+
+                                <div class="text-xs text-gray-600 space-y-1">
+                                    <p><strong>Assigned:</strong> @assignment.AssignedAt.ToString("MMM dd, yyyy")</p>
+                                    @if (assignment.ExpectedReturnDate.HasValue)
+                                    {
+                                        <p>
+                                            <strong>Return By:</strong> @assignment.ExpectedReturnDate.Value.ToString("MMM dd, yyyy")
+                                            @if (isOverdue)
+                                            {
+                                                <span class="ml-1 text-red-600 font-semibold">(Overdue)</span>
+                                            }
+                                        </p>
+                                    }
+                                    @if (assignment.ReturnRequestedAt.HasValue)
+                                    {
+                                        <p><strong>Return Requested:</strong> @assignment.ReturnRequestedAt.Value.ToString("MMM dd, yyyy")</p>
+                                    }
+                                    @if (assignment.ReturnVerifiedAt.HasValue)
+                                    {
+                                        <p><strong>Return Verified:</strong> @assignment.ReturnVerifiedAt.Value.ToString("MMM dd, yyyy")</p>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(assignment.AdminNotes))
+                                    {
+                                        <p><strong>Admin Notes:</strong> @assignment.AdminNotes</p>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(assignment.ApplicantResponse))
+                                    {
+                                        <p><strong>Your Response:</strong> @assignment.ApplicantResponse</p>
+                                    }
+                                </div>
+
+                                <div class="mt-3 space-y-2">
+                                    @if (CanRequestReturn(assignment))
+                                    {
+                                        <button class="w-full px-3 py-2 bg-[var(--primary)] text-white rounded text-xs font-semibold disabled:opacity-50"
+                                                disabled="@IsAssignmentProcessing(assignment.Id)"
+                                                @onclick="@(() => RequestReturn(assignment.Id))">
+                                            @(IsAssignmentProcessing(assignment.Id) ? "Requesting..." : "Request Return")
+                                        </button>
+                                    }
+                                    else if (assignment.Status == "ReturnRequested")
+                                    {
+                                        <div class="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
+                                            Return request submitted. Waiting for admin review.
+                                        </div>
+                                    }
+                                    else if (assignment.Status == "ReturnRejected")
+                                    {
+                                        <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                                            Return request rejected. You can request again when ready.
+                                        </div>
+                                    }
+                                    else if (assignment.Status == "PendingDamageAcknowledgment")
+                                    {
+                                        <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                                            Admin marked this return as damaged. Please acknowledge or dispute.
+                                        </div>
+
+                                        <button class="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-semibold disabled:opacity-50"
+                                                disabled="@IsAssignmentProcessing(assignment.Id)"
+                                                @onclick="@(() => AcknowledgeDamage(assignment.Id))">
+                                            @(IsAssignmentProcessing(assignment.Id) ? "Submitting..." : "Acknowledge Damage")
+                                        </button>
+
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">Dispute Damage</label>
+                                            <textarea rows="3"
+                                                      @bind="disputeResponses[assignment.Id]"
+                                                      class="w-full px-3 py-2 border rounded text-xs focus:border-[var(--primary)] focus:outline-none"
+                                                      placeholder="Explain why you dispute the damage..."></textarea>
+                                            <button class="mt-2 w-full px-3 py-2 bg-gray-900 text-white rounded text-xs font-semibold disabled:opacity-50"
+                                                    disabled="@IsAssignmentProcessing(assignment.Id)"
+                                                    @onclick="@(() => DisputeDamage(assignment.Id))">
+                                                @(IsAssignmentProcessing(assignment.Id) ? "Submitting..." : "Submit Dispute")
+                                            </button>
+                                        </div>
+                                    }
+                                    else if (assignment.Status == "DamageDisputed")
+                                    {
+                                        <div class="text-xs text-gray-700 bg-gray-100 border border-gray-200 rounded p-2">
+                                            Damage dispute submitted. Waiting for admin resolution.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
         @if (application.Submissions.Any(s => s.Documents.Any()))
         {
             <div class="bg-white rounded-lg border p-4">
@@ -299,7 +438,7 @@ else
             </div>
         }
 
-        @if (application.ServiceType == "Equipment" && application.RegisteredEquipment != null && application.RegisteredEquipment.Any())
+        @if (application.RegisteredEquipment != null && application.RegisteredEquipment.Any())
         {
             <div class="bg-white rounded-lg border p-4">
                 <h2 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
@@ -331,6 +470,11 @@ else
     private bool isLoading = true;
     private bool isSubmitting = false;
     private int fileInputKey = 0;
+    private List<EquipmentAssignmentDto> equipmentAssignments = new();
+    private bool assignmentsLoading = false;
+    private string? assignmentsError;
+    private readonly HashSet<long> assignmentActionLoading = new();
+    private readonly Dictionary<long, string> disputeResponses = new();
 
     private class FileInfo
     {
@@ -362,15 +506,54 @@ else
                     stepFormDataCache[step.Order] = step.Submission?.FormData ?? string.Empty;
                     stepFilesCache[step.Order] = new List<FileInfo>();
                 }
+
+                await LoadEquipmentAssignments();
             }
         }
-        catch (Exception ex)
+        catch
         {
             ToastService.ShowError($"Failed to load application");
         }
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task LoadEquipmentAssignments()
+    {
+        if (!IsEquipmentLoan())
+        {
+            equipmentAssignments.Clear();
+            return;
+        }
+
+        try
+        {
+            assignmentsLoading = true;
+            assignmentsError = null;
+            equipmentAssignments = await Http.GetFromJsonAsync<List<EquipmentAssignmentDto>>(
+                $"api/EquipmentAssignments/application/{ApplicationId}") ?? new();
+
+            equipmentAssignments = equipmentAssignments
+                .OrderByDescending(a => a.AssignedAt)
+                .ToList();
+
+            foreach (var assignment in equipmentAssignments)
+            {
+                if (!disputeResponses.ContainsKey(assignment.Id))
+                {
+                    disputeResponses[assignment.Id] = string.Empty;
+                }
+            }
+        }
+        catch
+        {
+            assignmentsError = "Failed to load equipment assignments.";
+        }
+        finally
+        {
+            assignmentsLoading = false;
         }
     }
 
@@ -419,7 +602,7 @@ else
             ToastService.ShowSuccess($"{files.Count} file(s) selected");
             fileInputKey++;
         }
-        catch (Exception ex)
+        catch
         {
             ToastService.ShowError("File selection failed");
         }
@@ -564,6 +747,137 @@ else
         return status == ApplicationStatus.Approved || status == ApplicationStatus.Completed || status == ApplicationStatus.Rejected;
     }
 
+    private bool IsEquipmentLoan() => application?.ServiceType == "EquipmentLoan";
+
+    private bool IsOverdue(EquipmentAssignmentDto assignment) =>
+        assignment.ExpectedReturnDate.HasValue &&
+        assignment.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date &&
+        (assignment.Status == "CheckedOut" || assignment.Status == "ReturnRequested" || assignment.Status == "ReturnRejected");
+
+    private bool CanRequestReturn(EquipmentAssignmentDto assignment) =>
+        assignment.Status == "CheckedOut" || assignment.Status == "ReturnRejected";
+
+    private bool IsAssignmentProcessing(long assignmentId) => assignmentActionLoading.Contains(assignmentId);
+
+    private string GetAssignmentStatusLabel(string status) => status switch
+    {
+        "CheckedOut" => "Checked Out",
+        "ReturnRequested" => "Return Requested",
+        "PendingDamageAcknowledgment" => "Damaged (Pending)",
+        "DamageDisputed" => "Damage Disputed",
+        "ReturnedGood" => "Returned (Good)",
+        "ReturnedDamaged" => "Returned (Damaged)",
+        "ReturnRejected" => "Return Rejected",
+        _ => status
+    };
+
+    private string GetAssignmentStatusBadge(string status) => status switch
+    {
+        "CheckedOut" => "text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700",
+        "ReturnRequested" => "text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700",
+        "PendingDamageAcknowledgment" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        "DamageDisputed" => "text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700",
+        "ReturnedGood" => "text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700",
+        "ReturnedDamaged" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        "ReturnRejected" => "text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700",
+        _ => "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"
+    };
+
+    private async Task RequestReturn(long assignmentId)
+    {
+        if (assignmentActionLoading.Contains(assignmentId)) return;
+        assignmentActionLoading.Add(assignmentId);
+
+        try
+        {
+            var response = await Http.PostAsync($"api/EquipmentAssignments/{assignmentId}/request-return", null);
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Return request submitted");
+                await LoadEquipmentAssignments();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to submit return request");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to submit return request");
+        }
+        finally
+        {
+            assignmentActionLoading.Remove(assignmentId);
+        }
+    }
+
+    private async Task AcknowledgeDamage(long assignmentId)
+    {
+        if (assignmentActionLoading.Contains(assignmentId)) return;
+        assignmentActionLoading.Add(assignmentId);
+
+        try
+        {
+            var response = await Http.PostAsync($"api/EquipmentAssignments/{assignmentId}/acknowledge-damage", null);
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Damage acknowledged");
+                await LoadEquipmentAssignments();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to acknowledge damage");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to acknowledge damage");
+        }
+        finally
+        {
+            assignmentActionLoading.Remove(assignmentId);
+        }
+    }
+
+    private async Task DisputeDamage(long assignmentId)
+    {
+        if (assignmentActionLoading.Contains(assignmentId)) return;
+        assignmentActionLoading.Add(assignmentId);
+
+        try
+        {
+            disputeResponses.TryGetValue(assignmentId, out var responseText);
+            if (string.IsNullOrWhiteSpace(responseText))
+            {
+                ToastService.ShowError("Please provide your dispute response");
+                return;
+            }
+
+            var response = await Http.PostAsJsonAsync(
+                $"api/EquipmentAssignments/{assignmentId}/dispute-damage",
+                new { ApplicantResponse = responseText });
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Dispute submitted");
+                disputeResponses[assignmentId] = string.Empty;
+                await LoadEquipmentAssignments();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to submit dispute");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to submit dispute");
+        }
+        finally
+        {
+            assignmentActionLoading.Remove(assignmentId);
+        }
+    }
+
     private string GetStepCircleClass(bool isApproved, bool isPendingApproval, bool isRejected, bool isCurrent, bool hasSubmission, bool requiresApproval)
     {
         if (isApproved) return "bg-green-500 text-white";
@@ -617,6 +931,21 @@ else
     public class UploadConfigDto { public string? Label { get; set; } public string? Instructions { get; set; } public string[]? AllowedTypes { get; set; } public int? MaxFiles { get; set; } }
     public class SubmissionDto { public long Id { get; set; } public long StepId { get; set; } public int StepOrder { get; set; } public string StepName { get; set; } = string.Empty; public string? FormData { get; set; } public string Status { get; set; } = "Pending"; public string? RejectionReason { get; set; } public DateTime SubmittedAt { get; set; } public List<DocumentDto> Documents { get; set; } = new(); }
     public class DocumentDto { public long Id { get; set; } public string FileName { get; set; } = string.Empty; public string FilePath { get; set; } = string.Empty; }
+    public class EquipmentAssignmentDto
+    {
+        public long Id { get; set; }
+        public long ApplicationId { get; set; }
+        public long EquipmentId { get; set; }
+        public string EquipmentName { get; set; } = string.Empty;
+        public string EquipmentCode { get; set; } = string.Empty;
+        public DateTime AssignedAt { get; set; }
+        public DateTime? ExpectedReturnDate { get; set; }
+        public DateTime? ReturnRequestedAt { get; set; }
+        public DateTime? ReturnVerifiedAt { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? AdminNotes { get; set; }
+        public string? ApplicantResponse { get; set; }
+    }
     public class EquipmentDto { public string Name { get; set; } = string.Empty; public string SerialNumber { get; set; } = string.Empty; }
     public class UploadResponse { public long? DocumentId { get; set; } }
 }

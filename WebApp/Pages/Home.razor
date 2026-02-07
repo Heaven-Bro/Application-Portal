@@ -14,6 +14,58 @@
         <p class="text-sm md:text-base text-gray-600">Browse and apply for department services</p>
     </div>
 
+    <div class="mb-8 md:mb-10">
+        <div class="bg-white rounded-xl border p-5 md:p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900">Chairman Availability</h2>
+                    <p class="text-xs text-gray-500">@availabilityRangeLabel</p>
+                </div>
+            </div>
+
+            @if (availabilityLoading)
+            {
+                <div class="flex items-center gap-2 text-sm text-gray-600">
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-gray-200 border-t-[var(--primary)]"></div>
+                    Loading availability...
+                </div>
+            }
+            else if (!availabilitySlots.Any())
+            {
+                <p class="text-sm text-gray-600">No chairman availability set for this week.</p>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                    @foreach (var day in availabilityWeekDays)
+                    {
+                        var daySlots = GetSlotsForDay(day);
+                        <div class="border rounded-lg p-3 @(day.Date == DateTime.Today ? "bg-blue-50 border-blue-200" : "bg-gray-50")">
+                            <div class="text-xs font-semibold text-gray-700 mb-2">
+                                @day.ToString("ddd, MMM dd")
+                            </div>
+                            @if (daySlots.Count == 0)
+                            {
+                                <div class="text-xs text-gray-500">No slots</div>
+                            }
+                            else
+                            {
+                                <div class="space-y-1">
+                                    @foreach (var slot in daySlots)
+                                    {
+                                        <div class="text-xs font-medium text-gray-900 bg-white rounded px-2 py-1 border">
+                                            @slot.StartTime.ToString("hh:mm tt") - @slot.EndTime.ToString("hh:mm tt")
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
     @if (isLoading)
     {
         <div class="flex justify-center items-center py-20">
@@ -91,10 +143,16 @@
     private List<ServiceDto>? services;
     private bool isLoading = true;
     private bool isApplying = false;
+    private List<ChairmanAvailabilitySlotDto> availabilitySlots = new();
+    private bool availabilityLoading = true;
+    private List<DateTime> availabilityWeekDays = new();
+    private string availabilityRangeLabel = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
+        BuildAvailabilityWeek();
         await LoadServices();
+        await LoadAvailability();
     }
 
     private async Task LoadServices()
@@ -168,5 +226,53 @@
     public class CreateApplicationResponse
     {
         public long ApplicationId { get; set; }
+    }
+
+    private void BuildAvailabilityWeek()
+    {
+        var start = DateTime.Today;
+        while (start.DayOfWeek != DayOfWeek.Monday)
+        {
+            start = start.AddDays(-1);
+        }
+
+        availabilityWeekDays = Enumerable.Range(0, 7)
+            .Select(i => start.AddDays(i))
+            .ToList();
+
+        var end = start.AddDays(6);
+        availabilityRangeLabel = $"{start:MMM dd} - {end:MMM dd}";
+    }
+
+    private async Task LoadAvailability()
+    {
+        try
+        {
+            availabilityLoading = true;
+            availabilitySlots = await Http.GetFromJsonAsync<List<ChairmanAvailabilitySlotDto>>("api/chairman-availability/current-week") ?? new();
+        }
+        catch
+        {
+            availabilitySlots = new();
+        }
+        finally
+        {
+            availabilityLoading = false;
+        }
+    }
+
+    private List<ChairmanAvailabilitySlotDto> GetSlotsForDay(DateTime day)
+    {
+        return availabilitySlots
+            .Where(s => s.StartTime.Date == day.Date)
+            .OrderBy(s => s.StartTime)
+            .ToList();
+    }
+
+    public class ChairmanAvailabilitySlotDto
+    {
+        public long Id { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
     }
 }

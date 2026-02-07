@@ -58,7 +58,20 @@ public sealed class Equipment : Entity
         MarkAsModified(modifiedBy);
     }
 
+    public void UpdateConditionAndAvailability(EquipmentCondition condition, bool isAvailable, long modifiedBy)
+    {
+        Condition = condition;
+        IsAvailable = isAvailable;
+        MarkAsModified(modifiedBy);
+    }
+
     public void MarkAsAssigned(long modifiedBy)
+    {
+        IsAvailable = false;
+        MarkAsModified(modifiedBy);
+    }
+
+    public void MarkAsUnavailable(long modifiedBy)
     {
         IsAvailable = false;
         MarkAsModified(modifiedBy);

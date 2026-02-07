@@ -6,13 +6,16 @@ using Shared.Contracts.Services;
 using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
+using Domain.Notifications;
+using Domain.Common.Enums;
 
 public record ApproveStepCommand(long SubmissionId) : IRequest<Result>;
 
 public class ApproveStepCommandHandler(
     IApplicationRepository applicationRepository,
     IServiceRepository serviceRepository,
-    ICurrentUserService currentUser) : IRequestHandler<ApproveStepCommand, Result>
+    ICurrentUserService currentUser,
+    INotificationRepository notificationRepository) : IRequestHandler<ApproveStepCommand, Result>
 {
     public async Task<Result> Handle(ApproveStepCommand request, CancellationToken cancellationToken)
     {
@@ -44,6 +47,17 @@ public class ApproveStepCommandHandler(
 
         applicationRepository.Update(application);
         await applicationRepository.SaveChangesAsync(cancellationToken);
+
+        var message = $"Your step '{step.Name}' was approved for {service.Name}.";
+        var notification = Notification.Create(
+            application.ApplicantId,
+            NotificationType.StepApproved,
+            application.Id,
+            message,
+            null,
+            currentUser.UserId);
+        await notificationRepository.AddAsync(notification, cancellationToken);
+        await notificationRepository.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
     }

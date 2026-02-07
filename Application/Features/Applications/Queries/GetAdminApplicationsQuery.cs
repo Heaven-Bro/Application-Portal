@@ -2,6 +2,7 @@ namespace Application.Features.Applications.Queries;
 
 using MediatR;
 using Domain.Repositories;
+using Domain.Common.Enums;
 
 public record GetAdminApplicationsQuery(
     int Page = 1,
@@ -11,7 +12,8 @@ public record GetAdminApplicationsQuery(
     string? ServiceType = null,
     long? ApplicantId = null,
     DateTime? FromDate = null,
-    DateTime? ToDate = null
+    DateTime? ToDate = null,
+    bool? ReturnRequestsOnly = null
 ) : IRequest<PaginatedResult<AdminApplicationListItemDto>>;
 
 public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicationsQuery, PaginatedResult<AdminApplicationListItemDto>>
@@ -19,15 +21,18 @@ public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicat
     private readonly IApplicationRepository _applicationRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IEquipmentAssignmentRepository _equipmentAssignmentRepository;
 
     public GetAdminApplicationsQueryHandler(
         IApplicationRepository applicationRepository,
         IServiceRepository serviceRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IEquipmentAssignmentRepository equipmentAssignmentRepository)
     {
         _applicationRepository = applicationRepository;
         _serviceRepository = serviceRepository;
         _userRepository = userRepository;
+        _equipmentAssignmentRepository = equipmentAssignmentRepository;
     }
 
     public async Task<PaginatedResult<AdminApplicationListItemDto>> Handle(GetAdminApplicationsQuery request, CancellationToken cancellationToken)
@@ -76,6 +81,24 @@ public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicat
             }
         }
 
+        bool IsPendingReturn(EquipmentAssignmentStatus status) => status is
+            EquipmentAssignmentStatus.ReturnRequested or
+            EquipmentAssignmentStatus.PendingDamageAcknowledgment or
+            EquipmentAssignmentStatus.DamageDisputed;
+
+        if (request.ReturnRequestsOnly == true)
+        {
+            var appIds = query.Select(a => a.Id).ToList();
+            var assignments = await _equipmentAssignmentRepository.GetByApplicationIdsAsync(appIds, cancellationToken);
+            var pendingAppIds = assignments
+                .Where(a => IsPendingReturn(a.Status))
+                .Select(a => a.ApplicationId)
+                .Distinct()
+                .ToHashSet();
+
+            query = query.Where(a => pendingAppIds.Contains(a.Id)).ToList();
+        }
+
         query = query.OrderByDescending(a => a.CreatedAt).ToList();
 
         var totalCount = query.Count;
@@ -83,6 +106,13 @@ public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicat
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToList();
+
+        var itemIds = items.Select(a => a.Id).ToList();
+        var itemAssignments = await _equipmentAssignmentRepository.GetByApplicationIdsAsync(itemIds, cancellationToken);
+        var pendingCountByAppId = itemAssignments
+            .Where(a => IsPendingReturn(a.Status))
+            .GroupBy(a => a.ApplicationId)
+            .ToDictionary(g => g.Key, g => g.Count());
 
         var dtos = new List<AdminApplicationListItemDto>();
 
@@ -93,6 +123,7 @@ public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicat
 
             if (service != null && user != null)
             {
+                pendingCountByAppId.TryGetValue(app.Id, out var pendingCount);
                 dtos.Add(new AdminApplicationListItemDto(
                     app.Id,
                     app.ServiceId,
@@ -104,7 +135,8 @@ public class GetAdminApplicationsQueryHandler : IRequestHandler<GetAdminApplicat
                     app.Status.ToString(),
                     app.CurrentStep,
                     app.ScheduledDateTime,
-                    app.CreatedAt
+                    app.CreatedAt,
+                    pendingCount
                 ));
             }
         }
@@ -129,7 +161,8 @@ public record AdminApplicationListItemDto(
     string Status,
     int CurrentStep,
     DateTime? ScheduledDateTime,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    int PendingReturnCount
 );
 
 public record PaginatedResult<T>(

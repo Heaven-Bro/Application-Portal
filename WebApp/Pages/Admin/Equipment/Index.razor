@@ -127,8 +127,110 @@
 
                     @if (expandedId == equipment.Id)
                     {
-                        <div class="border-t border-gray-200 bg-gray-50 p-4">
-                            <p class="text-sm text-gray-600">Assignment history will be shown here...</p>
+                        <div class="border-t border-gray-200 bg-gray-50 p-4 space-y-3">
+                            @if (detailsLoading.Contains(equipment.Id))
+                            {
+                                <p class="text-sm text-gray-600">Loading assignment history...</p>
+                            }
+                            else if (detailsError.TryGetValue(equipment.Id, out var error))
+                            {
+                                <div class="text-sm text-red-600">@error</div>
+                            }
+                            else if (equipmentDetails.TryGetValue(equipment.Id, out var detail))
+                            {
+                                <div class="bg-white border border-gray-200 rounded-lg p-2">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="text-xs font-semibold text-gray-900">Assignment History</div>
+                                        <span class="text-xs text-gray-500">@detail.CurrentStatus</span>
+                                    </div>
+
+                                    @if (!detail.AssignmentHistory.Any())
+                                    {
+                                        <p class="text-xs text-gray-600">No assignments yet.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="space-y-1">
+                                            @foreach (var assignment in detail.AssignmentHistory)
+                                            {
+                                                var editState = GetAssignmentEditState(assignment.Id, assignment.ExpectedReturnDate);
+                                                <div class="flex items-start justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 bg-gray-50 text-xs">
+                                                    <div class="min-w-0">
+                                                        <div class="font-semibold text-gray-900 truncate">Application #@assignment.ApplicationId</div>
+                                                        <div class="text-[11px] text-gray-600">@GetAssignmentRangeLabel(assignment)</div>
+                                                    </div>
+                                                    <div class="flex items-center gap-1 shrink-0">
+                                                        @if (assignment.IsOverdue)
+                                                        {
+                                                            <span class="px-2 py-0.5 bg-orange-100 text-orange-800 text-[11px] font-semibold rounded-full">Overdue</span>
+                                                        }
+                                                        @if (IsActiveAssignment(assignment.Status))
+                                                        {
+                                                            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[11px] font-semibold rounded-full">Current</span>
+                                                        }
+                                                        <span class="px-2 py-0.5 bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-full">@assignment.Status</span>
+                                                    </div>
+                                                </div>
+
+                                                @if (IsReturnDateEditable(assignment.Status))
+                                                {
+                                                    <div class="mt-1 mb-2">
+                                                        <div class="flex flex-wrap items-end gap-2">
+                                                            <div>
+                                                                <label class="block text-[11px] font-medium text-gray-700 mb-1">Update Return Date</label>
+                                                                <input type="date"
+                                                                       @bind="editState.ExpectedReturnDate"
+                                                                       class="px-2 py-1 text-[11px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary" />
+                                                            </div>
+                                                            <button class="px-2.5 py-1 text-[11px] bg-primary text-white rounded hover:opacity-90 disabled:opacity-60"
+                                                                    disabled="@editState.IsSaving"
+                                                                    @onclick="@(() => UpdateReturnDate(assignment.Id, editState, equipment.Id))">
+                                                                @(editState.IsSaving ? "Updating..." : "Update")
+                                                            </button>
+                                                        </div>
+                                                        @if (!string.IsNullOrWhiteSpace(editState.Error))
+                                                        {
+                                                            <p class="text-[11px] text-red-600 mt-1">@editState.Error</p>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="bg-white border border-gray-200 rounded-lg p-3">
+                                    <div class="text-sm font-semibold text-gray-900 mb-2">Condition Control</div>
+                                    <p class="text-xs text-gray-600 mb-2">
+                                        Current condition: <strong>@GetConditionLabel(detail.Condition)</strong>
+                                    </p>
+                                    @{
+                                        var conditionState = GetConditionEditState(detail.Id, detail.Condition);
+                                    }
+                                    <div class="flex flex-wrap items-end gap-2">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-700 mb-1">Set Condition</label>
+                                            <select class="px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                                                    @bind="conditionState.Condition">
+                                                <option value="0">Good</option>
+                                                <option value="1">Fair</option>
+                                                <option value="2">Damaged</option>
+                                                <option value="3">Under Maintenance</option>
+                                                <option value="4">Retired</option>
+                                            </select>
+                                        </div>
+                                        <button class="px-3 py-1.5 text-xs bg-gray-900 text-white rounded hover:opacity-90 disabled:opacity-60"
+                                                disabled="@conditionState.IsSaving"
+                                                @onclick="@(() => UpdateCondition(detail.Id, conditionState, equipment.Id))">
+                                            @(conditionState.IsSaving ? "Saving..." : "Update Condition")
+                                        </button>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(conditionState.Error))
+                                    {
+                                        <p class="text-xs text-red-600 mt-1">@conditionState.Error</p>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -157,6 +259,11 @@
     private int pageSize = 10;
     private System.Timers.Timer? searchDebounceTimer;
     private long? expandedId = null;
+    private readonly Dictionary<long, EquipmentDetailDto> equipmentDetails = new();
+    private readonly HashSet<long> detailsLoading = new();
+    private readonly Dictionary<long, string> detailsError = new();
+    private readonly Dictionary<long, AssignmentEditState> assignmentEdits = new();
+    private readonly Dictionary<long, ConditionEditState> conditionEdits = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -235,10 +342,238 @@
         }
     }
 
-    private void ToggleExpand(long equipmentId)
+    private async Task ToggleExpand(long equipmentId)
     {
         expandedId = expandedId == equipmentId ? null : equipmentId;
+        if (expandedId == equipmentId)
+        {
+            await LoadEquipmentDetails(equipmentId);
+        }
     }
+
+    private async Task LoadEquipmentDetails(long equipmentId)
+    {
+        if (equipmentDetails.ContainsKey(equipmentId) || detailsLoading.Contains(equipmentId))
+            return;
+
+        detailsLoading.Add(equipmentId);
+        detailsError.Remove(equipmentId);
+
+        try
+        {
+            var detail = await Http.GetFromJsonAsync<EquipmentDetailDto>($"api/equipment/{equipmentId}");
+            if (detail != null)
+            {
+                equipmentDetails[equipmentId] = detail;
+                var conditionState = GetConditionEditState(detail.Id, detail.Condition);
+                conditionState.Condition = detail.Condition;
+            }
+            else
+            {
+                detailsError[equipmentId] = "Equipment details not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            detailsError[equipmentId] = $"Failed to load assignment history: {ex.Message}";
+        }
+        finally
+        {
+            detailsLoading.Remove(equipmentId);
+            StateHasChanged();
+        }
+    }
+
+    private AssignmentEditState GetAssignmentEditState(long assignmentId, DateTime? expectedReturnDate)
+    {
+        if (!assignmentEdits.TryGetValue(assignmentId, out var state))
+        {
+            state = new AssignmentEditState
+            {
+                ExpectedReturnDate = expectedReturnDate
+            };
+            assignmentEdits[assignmentId] = state;
+        }
+
+        return state;
+    }
+
+    private ConditionEditState GetConditionEditState(long equipmentId, int condition)
+    {
+        if (!conditionEdits.TryGetValue(equipmentId, out var state))
+        {
+            state = new ConditionEditState
+            {
+                Condition = condition
+            };
+            conditionEdits[equipmentId] = state;
+        }
+
+        return state;
+    }
+
+    private async Task UpdateReturnDate(long assignmentId, AssignmentEditState state, long equipmentId)
+    {
+        state.Error = null;
+        state.IsSaving = true;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync(
+                $"api/EquipmentAssignments/{assignmentId}/return-date",
+                new { ExpectedReturnDate = state.ExpectedReturnDate });
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Return date updated");
+                await RefreshEquipment(equipmentId);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                state.Error = string.IsNullOrWhiteSpace(errorContent) ? "Failed to update return date" : errorContent;
+            }
+        }
+        catch (Exception ex)
+        {
+            state.Error = ex.Message;
+        }
+        finally
+        {
+            state.IsSaving = false;
+        }
+    }
+
+    private async Task UpdateCondition(long equipmentId, ConditionEditState state, long refreshEquipmentId)
+    {
+        state.Error = null;
+        state.IsSaving = true;
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync(
+                $"api/equipment/{equipmentId}/condition",
+                new { Condition = state.Condition });
+
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Condition updated");
+                await RefreshEquipment(refreshEquipmentId);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                state.Error = string.IsNullOrWhiteSpace(errorContent) ? "Failed to update condition" : errorContent;
+            }
+        }
+        catch (Exception ex)
+        {
+            state.Error = ex.Message;
+        }
+        finally
+        {
+            state.IsSaving = false;
+        }
+    }
+
+    private async Task RefreshEquipment(long equipmentId)
+    {
+        equipmentDetails.Remove(equipmentId);
+        detailsError.Remove(equipmentId);
+        assignmentEdits.Clear();
+        conditionEdits.Remove(equipmentId);
+        await LoadEquipmentDetails(equipmentId);
+        await LoadEquipment();
+    }
+
+    private bool IsReturnDateEditable(string status) => status is
+        "CheckedOut" or
+        "ReturnRequested" or
+        "ReturnRejected" or
+        "PendingDamageAcknowledgment" or
+        "DamageDisputed";
+
+    private bool IsActiveAssignment(string status) => status is
+        "CheckedOut" or
+        "ReturnRequested" or
+        "ReturnRejected" or
+        "PendingDamageAcknowledgment" or
+        "DamageDisputed";
+
+    private string GetAssignmentRangeLabel(AssignmentHistoryDto assignment)
+    {
+        var assigned = FormatBdDateTime(assignment.AssignedAt, "MMM dd, yyyy HH:mm");
+
+        if (assignment.ReturnVerifiedAt.HasValue)
+        {
+            var returned = FormatBdDateTime(assignment.ReturnVerifiedAt.Value, "MMM dd, yyyy HH:mm");
+            return $"{assigned} - {returned}";
+        }
+
+        if (assignment.ExpectedReturnDate.HasValue)
+        {
+            var expected = FormatBdDateTime(assignment.ExpectedReturnDate.Value, "MMM dd, yyyy");
+            if (IsActiveAssignment(assignment.Status))
+            {
+                return $"Since {assigned} • Return by {expected}";
+            }
+
+            return $"Assigned {assigned} • Return by {expected}";
+        }
+
+        return $"Assigned {assigned}";
+    }
+
+    private static TimeZoneInfo? _bangladeshTimeZone;
+
+    private static TimeZoneInfo GetBangladeshTimeZone()
+    {
+        if (_bangladeshTimeZone != null)
+            return _bangladeshTimeZone;
+
+        var timeZoneIds = new[] { "Bangladesh Standard Time", "Asia/Dhaka" };
+        foreach (var id in timeZoneIds)
+        {
+            try
+            {
+                _bangladeshTimeZone = TimeZoneInfo.FindSystemTimeZoneById(id);
+                return _bangladeshTimeZone;
+            }
+            catch
+            {
+                
+            }
+        }
+
+        _bangladeshTimeZone = TimeZoneInfo.Local;
+        return _bangladeshTimeZone;
+    }
+
+    private static DateTime ToBangladeshTime(DateTime dateTime)
+    {
+        var utc = dateTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+            : dateTime.ToUniversalTime();
+
+        var tz = GetBangladeshTimeZone();
+        return TimeZoneInfo.ConvertTimeFromUtc(utc, tz);
+    }
+
+    private static string FormatBdDateTime(DateTime dateTime, string format)
+    {
+        var bdTime = ToBangladeshTime(dateTime);
+        return bdTime.ToString(format);
+    }
+
+    private string GetConditionLabel(int condition) => condition switch
+    {
+        0 => "Good",
+        1 => "Fair",
+        2 => "Damaged",
+        3 => "Under Maintenance",
+        4 => "Retired",
+        _ => "Unknown"
+    };
 
     private void NavigateToCreate() => Navigation.NavigateTo("/admin/equipment/create");
     private void NavigateToEdit(long id) => Navigation.NavigateTo($"/admin/equipment/edit/{id}");
@@ -291,5 +626,47 @@
         public long? CurrentApplicationId { get; set; }
         public bool IsOverdue { get; set; }
         public DateTime? ExpectedReturnDate { get; set; }
+    }
+
+    public class EquipmentDetailDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string EquipmentCode { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsAvailable { get; set; }
+        public int Condition { get; set; }
+        public string CurrentStatus { get; set; } = string.Empty;
+        public List<AssignmentHistoryDto> AssignmentHistory { get; set; } = new();
+    }
+
+    public class AssignmentHistoryDto
+    {
+        public long Id { get; set; }
+        public long ApplicationId { get; set; }
+        public DateTime AssignedAt { get; set; }
+        public DateTime? ExpectedReturnDate { get; set; }
+        public DateTime? ReturnRequestedAt { get; set; }
+        public DateTime? ReturnVerifiedAt { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? AdminNotes { get; set; }
+        public string? ApplicantResponse { get; set; }
+        public DateTime? DamageAcknowledgedAt { get; set; }
+        public bool IsOverdue { get; set; }
+    }
+
+    private sealed class AssignmentEditState
+    {
+        public DateTime? ExpectedReturnDate { get; set; }
+        public bool IsSaving { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private sealed class ConditionEditState
+    {
+        public int Condition { get; set; }
+        public bool IsSaving { get; set; }
+        public string? Error { get; set; }
     }
 }

@@ -36,6 +36,15 @@ public class UserRepository : IUserRepository
             .AnyAsync(u => u.Email == email.ToLowerInvariant(), cancellationToken);
     }
 
+    public async Task<List<User>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Users
+            .AsNoTracking()
+            .OrderBy(u => u.Name)
+            .ThenBy(u => u.Username)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(User user, CancellationToken cancellationToken = default)
     {
         await _context.Users.AddAsync(user, cancellationToken);
@@ -56,7 +65,10 @@ public class UserRepository : IUserRepository
     {
         var search = searchTerm.ToLower();
         return await _context.Users
-            .Where(u => u.Username.ToLower().Contains(search) || u.Email.ToLower().Contains(search))
+            .Where(u =>
+                u.Username.ToLower().Contains(search) ||
+                u.Email.ToLower().Contains(search) ||
+                u.Name.ToLower().Contains(search))
             .ToListAsync(cancellationToken);
     }
 

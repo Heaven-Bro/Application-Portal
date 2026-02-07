@@ -6,12 +6,15 @@ using Shared.Contracts.Services;
 using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
+using Domain.Notifications;
+using Domain.Common.Enums;
 
 public record RejectStepCommand(long SubmissionId, string Reason) : IRequest<Result>;
 
 public class RejectStepCommandHandler(
     IApplicationRepository applicationRepository,
-    ICurrentUserService currentUser) : IRequestHandler<RejectStepCommand, Result>
+    ICurrentUserService currentUser,
+    INotificationRepository notificationRepository) : IRequestHandler<RejectStepCommand, Result>
 {
     public async Task<Result> Handle(RejectStepCommand request, CancellationToken cancellationToken)
     {
@@ -26,6 +29,17 @@ public class RejectStepCommandHandler(
 
         applicationRepository.Update(application);
         await applicationRepository.SaveChangesAsync(cancellationToken);
+
+        var message = $"Your application was rejected. Reason: {request.Reason}";
+        var notification = Notification.Create(
+            application.ApplicantId,
+            NotificationType.ApplicationRejected,
+            application.Id,
+            message,
+            null,
+            currentUser.UserId);
+        await notificationRepository.AddAsync(notification, cancellationToken);
+        await notificationRepository.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
     }

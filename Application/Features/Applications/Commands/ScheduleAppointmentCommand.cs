@@ -4,6 +4,8 @@ using MediatR;
 using Application.Common;
 using Domain.Repositories;
 using Application.Common.Interfaces;
+using Domain.Notifications;
+using Domain.Common.Enums;
 
 public record ScheduleAppointmentCommand(
     long ApplicationId,
@@ -15,13 +17,16 @@ public class ScheduleAppointmentCommandHandler : IRequestHandler<ScheduleAppoint
 {
     private readonly IApplicationRepository _applicationRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationRepository _notificationRepository;
 
     public ScheduleAppointmentCommandHandler(
         IApplicationRepository applicationRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        INotificationRepository notificationRepository)
     {
         _applicationRepository = applicationRepository;
         _currentUserService = currentUserService;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<Result> Handle(ScheduleAppointmentCommand request, CancellationToken cancellationToken)
@@ -35,6 +40,17 @@ public class ScheduleAppointmentCommandHandler : IRequestHandler<ScheduleAppoint
 
         _applicationRepository.Update(application);
         await _applicationRepository.SaveChangesAsync(cancellationToken);
+
+        var message = $"Your application has been approved. Appointment scheduled for {request.ScheduledDateTime:MMM dd, yyyy 'at' hh:mm tt}.";
+        var notification = Notification.Create(
+            application.ApplicantId,
+            NotificationType.AppointmentScheduled,
+            application.Id,
+            message,
+            null,
+            _currentUserService.UserId);
+        await _notificationRepository.AddAsync(notification, cancellationToken);
+        await _notificationRepository.SaveChangesAsync(cancellationToken);
 
         return Result.Success();
     }

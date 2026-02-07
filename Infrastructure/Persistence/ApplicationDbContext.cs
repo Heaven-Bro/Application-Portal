@@ -6,6 +6,8 @@ using Domain.Services;
 using Domain.Applications;
 using Domain.Equipment;
 using Domain.Documents;
+using Domain.Settings;
+using Domain.Notifications;
 using Infrastructure.Persistence.Configurations;
 
 public class ApplicationDbContext : DbContext
@@ -24,6 +26,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<EquipmentAssignment> EquipmentAssignments => Set<EquipmentAssignment>();
     public DbSet<UserDocument> UserDocuments { get; set; }
     public DbSet<StepSubmissionDocument> StepSubmissionDocuments { get; set; }
+    public DbSet<ChairmanAvailabilitySlot> ChairmanAvailabilitySlots => Set<ChairmanAvailabilitySlot>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

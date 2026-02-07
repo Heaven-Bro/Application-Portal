@@ -1,0 +1,220 @@
+@page "/admin/notifications"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IToastService ToastService
+
+<PageTitle>Admin Notifications</PageTitle>
+
+@if (isLoading)
+{
+    <div class="flex justify-center items-center min-h-[60vh]">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-blue-600"></div>
+    </div>
+}
+else
+{
+    <div class="max-w-4xl mx-auto space-y-4">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <h1 class="text-lg font-bold text-gray-900">Notifications</h1>
+                <p class="text-xs text-gray-500">Application and equipment activity that needs your attention.</p>
+            </div>
+            <button class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    disabled="@(!notifications.Any(n => !n.IsRead) || isProcessing)"
+                    @onclick="MarkAllRead">
+                @(isProcessing ? "Processing..." : "Mark all read")
+            </button>
+        </div>
+
+        @if (!notifications.Any())
+        {
+            <div class="p-4 bg-white border rounded-lg text-center text-sm text-gray-600">
+                No notifications yet.
+            </div>
+        }
+        else
+        {
+            <div class="space-y-2">
+                @foreach (var notification in notifications)
+                {
+                    <div class="p-3 border rounded-lg @(notification.IsRead ? "bg-white" : "bg-yellow-50 border-yellow-200")">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-900">@notification.Message</p>
+                                <p class="text-xs text-gray-500">@FormatDate(notification.CreatedAt)</p>
+                            </div>
+                            <span class="@GetTypeBadgeClass(notification.Type)">@GetTypeLabel(notification.Type)</span>
+                        </div>
+
+                        <div class="mt-2 flex items-center gap-2">
+                            @if (notification.ReferenceId.HasValue)
+                            {
+                                <button class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                        disabled="@IsProcessing(notification.Id)"
+                                        @onclick="() => OpenNotification(notification)">
+                                    View
+                                </button>
+                            }
+                            @if (!notification.IsRead)
+                            {
+                                <button class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+                                        disabled="@IsProcessing(notification.Id)"
+                                        @onclick="() => MarkRead(notification.Id)">
+                                    Mark read
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private readonly HashSet<long> processingIds = new();
+    private List<NotificationDto> notifications = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotifications();
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            isLoading = true;
+            notifications = await Http.GetFromJsonAsync<List<NotificationDto>>("api/notifications?take=50") ?? new();
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to load notifications");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task MarkRead(long id)
+    {
+        if (processingIds.Contains(id)) return;
+        processingIds.Add(id);
+
+        try
+        {
+            var response = await Http.PostAsync($"api/notifications/{id}/read", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var item = notifications.FirstOrDefault(n => n.Id == id);
+                if (item != null)
+                {
+                    item.IsRead = true;
+                }
+            }
+            else
+            {
+                ToastService.ShowError("Failed to mark notification as read");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to mark notification as read");
+        }
+        finally
+        {
+            processingIds.Remove(id);
+        }
+    }
+
+    private async Task MarkAllRead()
+    {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            var response = await Http.PostAsync("api/notifications/read-all", null);
+            if (response.IsSuccessStatusCode)
+            {
+                foreach (var notification in notifications)
+                {
+                    notification.IsRead = true;
+                }
+            }
+            else
+            {
+                ToastService.ShowError("Failed to mark all notifications as read");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to mark all notifications as read");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task OpenNotification(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await MarkRead(notification.Id);
+        }
+
+        if (notification.ReferenceId.HasValue)
+        {
+            Navigation.NavigateTo($"/admin/applications/{notification.ReferenceId.Value}");
+        }
+    }
+
+    private bool IsProcessing(long id) => processingIds.Contains(id) || isProcessing;
+
+    private string FormatDate(DateTime dateTime) =>
+        dateTime.ToLocalTime().ToString("MMM dd, yyyy hh:mm tt");
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "NewApplication" => "New Application",
+        "StepSubmitted" => "Step Submitted",
+        "ApplicationApproved" => "Application Approved",
+        "ApplicationRejected" => "Application Rejected",
+        "ReturnRequested" => "Return Requested",
+        "ReturnApproved" => "Return Approved",
+        "ReturnRejected" => "Return Rejected",
+        "EquipmentMarkedDamaged" => "Marked Damaged",
+        "DamageDisputed" => "Damage Disputed",
+        "DamageAcknowledged" => "Damage Acknowledged",
+        "AppointmentScheduled" => "Appointment Scheduled",
+        "StepApproved" => "Step Approved",
+        _ => type
+    };
+
+    private string GetTypeBadgeClass(string type) => type switch
+    {
+        "ApplicationRejected" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        "EquipmentMarkedDamaged" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        "ReturnRejected" => "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700",
+        "ReturnRequested" => "text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700",
+        "NewApplication" => "text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700",
+        "StepSubmitted" => "text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700",
+        _ => "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"
+    };
+
+    private sealed class NotificationDto
+    {
+        public long Id { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public long? ReferenceId { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}

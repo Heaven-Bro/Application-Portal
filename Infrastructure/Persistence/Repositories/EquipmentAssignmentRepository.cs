@@ -26,6 +26,16 @@ public class EquipmentAssignmentRepository : IEquipmentAssignmentRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<EquipmentAssignment>> GetByApplicationIdsAsync(List<long> applicationIds, CancellationToken cancellationToken = default)
+    {
+        if (applicationIds.Count == 0)
+            return new List<EquipmentAssignment>();
+
+        return await _context.EquipmentAssignments
+            .Where(ea => applicationIds.Contains(ea.ApplicationId))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<List<EquipmentAssignment>> GetByEquipmentIdAsync(long equipmentId, CancellationToken cancellationToken = default)
     {
         return await _context.EquipmentAssignments
@@ -39,7 +49,9 @@ public class EquipmentAssignmentRepository : IEquipmentAssignmentRepository
         var today = DateTime.UtcNow.Date;
         return await _context.EquipmentAssignments
             .Where(ea => ea.ExpectedReturnDate < today && 
-                         ea.Status == EquipmentAssignmentStatus.CheckedOut)
+                         (ea.Status == EquipmentAssignmentStatus.CheckedOut ||
+                          ea.Status == EquipmentAssignmentStatus.ReturnRequested ||
+                          ea.Status == EquipmentAssignmentStatus.ReturnRejected))
             .ToListAsync(cancellationToken);
     }
 

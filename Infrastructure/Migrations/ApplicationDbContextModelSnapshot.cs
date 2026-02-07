@@ -30,6 +30,10 @@ namespace Infrastructure.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AdminNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)");
+
                     b.Property<long>("ApplicantId")
                         .HasColumnType("bigint");
 
@@ -139,22 +143,18 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("Id");
+                        .HasColumnType("bigint");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("CreatedAt");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<long>("StepSubmissionId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("StepSubmissionId");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("UserDocumentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("UserDocumentId");
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -250,59 +250,64 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("Id");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("Category");
 
                     b.Property<int>("Condition")
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasColumnName("Condition");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("CreatedAt");
 
                     b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("CreatedBy");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("Description");
 
                     b.Property<string>("EquipmentCode")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("EquipmentCode");
 
                     b.Property<bool>("IsAvailable")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("IsAvailable");
 
                     b.Property<DateTime?>("ModifiedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("ModifiedAt");
 
                     b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("ModifiedBy");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("Name");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasColumnName("Version");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Condition");
-
-                    b.HasIndex("EquipmentCode")
-                        .IsUnique();
-
-                    b.HasIndex("IsAvailable");
 
                     b.ToTable("equipment", (string)null);
                 });
@@ -550,7 +555,9 @@ namespace Infrastructure.Migrations
                         .HasColumnType("varchar(2000)");
 
                     b.Property<bool>("IsOptional")
-                        .HasColumnType("tinyint(1)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("datetime(6)");
@@ -565,6 +572,11 @@ namespace Infrastructure.Migrations
 
                     b.Property<int>("Order")
                         .HasColumnType("int");
+
+                    b.Property<bool>("RequiresApproval")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("RequiresFileUpload")
                         .HasColumnType("tinyint(1)");
@@ -587,6 +599,41 @@ namespace Infrastructure.Migrations
                     b.HasIndex("ServiceId", "Order");
 
                     b.ToTable("service_steps", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Settings.ChairmanAvailabilitySlot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("chairman_availability", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Applications.StepSubmission", b =>

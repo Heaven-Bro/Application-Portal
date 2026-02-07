@@ -114,6 +114,19 @@ public sealed class EquipmentAssignment : Entity
         MarkAsModified(adminId);
     }
 
+    public void UpdateExpectedReturnDate(DateTime? expectedReturnDate, long adminId)
+    {
+        if (Status == EquipmentAssignmentStatus.ReturnedGood || 
+            Status == EquipmentAssignmentStatus.ReturnedDamaged)
+            throw new InvalidStateTransitionException(Status.ToString(), "UpdateExpectedReturnDate");
+
+        if (expectedReturnDate.HasValue && expectedReturnDate.Value.Date < DateTime.UtcNow.Date)
+            throw new BusinessRuleViolationException("Expected return date must be today or in the future");
+
+        ExpectedReturnDate = expectedReturnDate;
+        MarkAsModified(adminId);
+    }
+
     public bool IsReturned()
     {
         return Status == EquipmentAssignmentStatus.ReturnedGood || 

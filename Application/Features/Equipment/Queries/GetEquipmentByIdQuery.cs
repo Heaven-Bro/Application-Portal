@@ -27,14 +27,26 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
             return null;
 
         var assignments = await _assignmentRepository.GetByEquipmentIdAsync(equipment.Id, cancellationToken);
+        assignments = assignments
+            .GroupBy(a => a.Id)
+            .Select(g => g.First())
+            .ToList();
 
-        var activeAssignment = assignments.FirstOrDefault(a =>
-            a.Status == EquipmentAssignmentStatus.CheckedOut ||
-            a.Status == EquipmentAssignmentStatus.ReturnRequested);
+        bool IsActiveStatus(EquipmentAssignmentStatus status) => status is
+            EquipmentAssignmentStatus.CheckedOut or
+            EquipmentAssignmentStatus.ReturnRequested or
+            EquipmentAssignmentStatus.ReturnRejected or
+            EquipmentAssignmentStatus.PendingDamageAcknowledgment or
+            EquipmentAssignmentStatus.DamageDisputed;
+
+        var activeAssignment = assignments.FirstOrDefault(a => IsActiveStatus(a.Status));
 
         var isOverdue = activeAssignment != null &&
                         activeAssignment.ExpectedReturnDate.HasValue &&
-                        activeAssignment.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date;
+                        activeAssignment.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date &&
+                        (activeAssignment.Status == EquipmentAssignmentStatus.CheckedOut ||
+                         activeAssignment.Status == EquipmentAssignmentStatus.ReturnRequested ||
+                         activeAssignment.Status == EquipmentAssignmentStatus.ReturnRejected);
 
         string currentStatus = "Available";
         if (activeAssignment != null)
@@ -45,6 +57,7 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
                 EquipmentAssignmentStatus.ReturnRequested => "Return Pending",
                 EquipmentAssignmentStatus.PendingDamageAcknowledgment => "Damaged (Pending)",
                 EquipmentAssignmentStatus.DamageDisputed => "Damage Disputed",
+                EquipmentAssignmentStatus.ReturnRejected => "Return Rejected",
                 _ => "In Use"
             };
         }
@@ -53,6 +66,10 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
             currentStatus = "Needs Repair";
         }
 
+        bool isConditionBad = equipment.Condition != EquipmentCondition.Good &&
+                              equipment.Condition != EquipmentCondition.Fair;
+        bool actualAvailability = equipment.IsAvailable && !isConditionBad && activeAssignment == null;
+
         return new EquipmentDetailDto
         {
             Id = equipment.Id,
@@ -60,7 +77,7 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
             EquipmentCode = equipment.EquipmentCode,
             Category = equipment.Category,
             Description = equipment.Description,
-            IsAvailable = equipment.IsAvailable,
+            IsAvailable = actualAvailability,
             Condition = (int)equipment.Condition,
             CurrentStatus = currentStatus,
             AssignmentHistory = assignments.Select(a => new AssignmentHistoryDto
@@ -73,10 +90,13 @@ public sealed class GetEquipmentByIdQueryHandler : IRequestHandler<GetEquipmentB
                 ReturnVerifiedAt = a.ReturnVerifiedAt,
                 Status = a.Status.ToString(),
                 AdminNotes = a.AdminNotes,
+                ApplicantResponse = a.ApplicantResponse,
+                DamageAcknowledgedAt = a.DamageAcknowledgedAt,
                 IsOverdue = a.ExpectedReturnDate.HasValue && 
                            a.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date &&
                            (a.Status == EquipmentAssignmentStatus.CheckedOut || 
-                            a.Status == EquipmentAssignmentStatus.ReturnRequested)
+                            a.Status == EquipmentAssignmentStatus.ReturnRequested ||
+                            a.Status == EquipmentAssignmentStatus.ReturnRejected)
             }).OrderByDescending(a => a.AssignedAt).ToList()
         };
     }
@@ -105,6 +125,8 @@ public class AssignmentHistoryDto
     public DateTime? ReturnVerifiedAt { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? AdminNotes { get; set; }
+    public string? ApplicantResponse { get; set; }
+    public DateTime? DamageAcknowledgedAt { get; set; }
     public bool IsOverdue { get; set; }
 }
 

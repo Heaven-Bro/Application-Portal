@@ -6,6 +6,7 @@ using Shared.Contracts.Services;
 using Shared.Contracts.Common;
 using Application.Common.Interfaces;
 using Domain.Repositories;
+using Domain.Common.Enums;
 
 public record LoginQuery(string Email, string Password) : IRequest<Result<LoginResponse>>;
 
@@ -24,6 +25,9 @@ public class LoginQueryHandler(
 
         if (!passwordHasher.Verify(request.Password, user.PasswordHash))
             return Result<LoginResponse>.Failure("Invalid email or password");
+
+        if (user.Status != UserStatus.Active)
+            return Result<LoginResponse>.Failure("Account is disabled");
 
         if (!user.EmailConfirmed)
             return Result<LoginResponse>.Failure("Email not verified");

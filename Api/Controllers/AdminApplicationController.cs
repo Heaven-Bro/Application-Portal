@@ -27,9 +27,10 @@ public class AdminApplicationController : ControllerBase
         [FromQuery] string? serviceType = null,
         [FromQuery] long? applicantId = null,
         [FromQuery] DateTime? fromDate = null,
-        [FromQuery] DateTime? toDate = null)
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] bool? returnRequestsOnly = null)
     {
-        var query = new GetAdminApplicationsQuery(page, pageSize, search, status, serviceType, applicantId, fromDate, toDate);
+        var query = new GetAdminApplicationsQuery(page, pageSize, search, status, serviceType, applicantId, fromDate, toDate, returnRequestsOnly);
         var result = await _mediator.Send(query);
         return Ok(result);
     }

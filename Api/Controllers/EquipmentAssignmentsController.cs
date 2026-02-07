@@ -78,6 +78,15 @@ public class EquipmentAssignmentsController : ControllerBase
         return Ok(new { message = "Assignment resolved manually" });
     }
 
+    [HttpPut("{assignmentId}/return-date")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateReturnDate(long assignmentId, [FromBody] UpdateReturnDateRequest request)
+    {
+        var command = new UpdateReturnDateCommand(assignmentId, request.ExpectedReturnDate);
+        await _mediator.Send(command);
+        return Ok(new { message = "Return date updated" });
+    }
+
     [HttpGet("overdue")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetOverdue()
@@ -131,4 +140,5 @@ public record AssignEquipmentRequest(long ApplicationId, long EquipmentId, DateT
 public record MarkDamagedRequest(string AdminNotes);
 public record RejectReturnRequest(string AdminNotes);
 public record ResolveManuallyRequest(EquipmentAssignmentStatus FinalStatus, string Notes);
+public record UpdateReturnDateRequest(DateTime? ExpectedReturnDate);
 public record DisputeDamageRequest(string ApplicantResponse);

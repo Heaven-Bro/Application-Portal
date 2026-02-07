@@ -36,13 +36,21 @@ public sealed class GetAllEquipmentsQueryHandler : IRequestHandler<GetAllEquipme
         {
             var assignments = await _assignmentRepository.GetByEquipmentIdAsync(equipment.Id, cancellationToken);
             
-            var activeAssignment = assignments.FirstOrDefault(a => 
-                a.Status == EquipmentAssignmentStatus.CheckedOut || 
-                a.Status == EquipmentAssignmentStatus.ReturnRequested);
+            bool IsActiveStatus(EquipmentAssignmentStatus status) => status is
+                EquipmentAssignmentStatus.CheckedOut or
+                EquipmentAssignmentStatus.ReturnRequested or
+                EquipmentAssignmentStatus.ReturnRejected or
+                EquipmentAssignmentStatus.PendingDamageAcknowledgment or
+                EquipmentAssignmentStatus.DamageDisputed;
+
+            var activeAssignment = assignments.FirstOrDefault(a => IsActiveStatus(a.Status));
 
             var isOverdue = activeAssignment != null && 
                            activeAssignment.ExpectedReturnDate.HasValue && 
-                           activeAssignment.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date;
+                           activeAssignment.ExpectedReturnDate.Value.Date < DateTime.UtcNow.Date &&
+                           (activeAssignment.Status == EquipmentAssignmentStatus.CheckedOut ||
+                            activeAssignment.Status == EquipmentAssignmentStatus.ReturnRequested ||
+                            activeAssignment.Status == EquipmentAssignmentStatus.ReturnRejected);
 
             bool isConditionBad = equipment.Condition != EquipmentCondition.Good && 
                                   equipment.Condition != EquipmentCondition.Fair;
@@ -61,6 +69,7 @@ public sealed class GetAllEquipmentsQueryHandler : IRequestHandler<GetAllEquipme
                     EquipmentAssignmentStatus.ReturnRequested => "Return Pending",
                     EquipmentAssignmentStatus.PendingDamageAcknowledgment => "Damaged (Pending)",
                     EquipmentAssignmentStatus.DamageDisputed => "Damage Disputed",
+                    EquipmentAssignmentStatus.ReturnRejected => "Return Rejected",
                     _ => "In Use"
                 };
             }
@@ -73,7 +82,7 @@ public sealed class GetAllEquipmentsQueryHandler : IRequestHandler<GetAllEquipme
                 currentStatus = equipment.IsAvailable ? "Ready" : "Unavailable";
             }
 
-            bool actualAvailability = equipment.IsAvailable && !isConditionBad;
+            bool actualAvailability = equipment.IsAvailable && !isConditionBad && activeAssignment == null;
 
             equipmentWithAssignments.Add(new EquipmentDto
             {

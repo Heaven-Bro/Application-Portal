@@ -74,6 +74,18 @@ public class EquipmentController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id}/condition")]
+    public async Task<IActionResult> UpdateCondition(long id, [FromBody] UpdateEquipmentConditionRequest request)
+    {
+        var command = new UpdateEquipmentConditionCommand(
+            id,
+            (Domain.Common.Enums.EquipmentCondition)request.Condition
+        );
+
+        await _mediator.Send(command);
+        return Ok(new { message = "Equipment condition updated" });
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(long id)
     {
@@ -106,3 +118,5 @@ public record UpdateEquipmentRequest(
     int Condition,
     string? Description
 );
+
+public record UpdateEquipmentConditionRequest(int Condition);

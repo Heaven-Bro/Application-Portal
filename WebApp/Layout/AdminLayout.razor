@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+@inject HttpClient Http
 @inject IJSRuntime JSRuntime
 
 <div class="min-h-screen bg-[var(--background-color)] w-full">
@@ -111,7 +112,7 @@
                 </div>
 
                 <div class="flex items-center space-x-4">
-                    <button class="relative p-2 rounded-lg hover:bg-gray-100">
+                    <button class="relative p-2 rounded-lg hover:bg-gray-100" @onclick="NavigateToNotifications">
                         <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -157,7 +158,7 @@
     private bool _isProfileDropdownOpen = false;
     private string _pageTitle = "Dashboard";
     private string _userName = "Admin User";
-    private int _notificationCount = 3;
+    private int _notificationCount = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,6 +172,7 @@
 
         Navigation.LocationChanged += OnLocationChanged;
         UpdatePageTitle();
+        await LoadNotificationCountAsync();
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -192,6 +194,7 @@
             "/admin/users" => "User Management",
             "/admin/settings" => "System Settings",
             "/admin/equipment" => "Equipment Management",
+            "/admin/notifications" => "Notifications",
             _ => "Admin Panel"
         };
     }
@@ -211,9 +214,33 @@
         _isProfileDropdownOpen = !_isProfileDropdownOpen;
     }
 
+    private void NavigateToNotifications()
+    {
+        _isProfileDropdownOpen = false;
+        Navigation.NavigateTo("/admin/notifications");
+    }
+
     private void HandleLogout()
     {
         Navigation.NavigateTo("/logout");
+    }
+
+    private async Task LoadNotificationCountAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<UnreadCountResponse>("api/notifications/unread-count");
+            _notificationCount = response?.Count ?? 0;
+        }
+        catch
+        {
+            _notificationCount = 0;
+        }
+    }
+
+    private sealed class UnreadCountResponse
+    {
+        public int Count { get; set; }
     }
 
     public void Dispose()

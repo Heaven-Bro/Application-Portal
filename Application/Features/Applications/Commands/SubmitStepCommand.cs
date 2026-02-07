@@ -7,6 +7,8 @@ using Shared.Contracts.Services;
 using Shared.Contracts.Common;
 using Domain.Repositories;
 using FluentValidation;
+using Domain.Notifications;
+using Domain.Common.Enums;
 
 public sealed record SubmitStepCommand(
     long ApplicationId,
@@ -33,17 +35,23 @@ public sealed class SubmitStepCommandHandler : IRequestHandler<SubmitStepCommand
     private readonly IServiceRepository _serviceRepository;
     private readonly IUserDocumentRepository _documentRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserRepository _userRepository;
+    private readonly INotificationRepository _notificationRepository;
 
     public SubmitStepCommandHandler(
         IApplicationRepository applicationRepository,
         IServiceRepository serviceRepository,
         IUserDocumentRepository documentRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUserRepository userRepository,
+        INotificationRepository notificationRepository)
     {
         _applicationRepository = applicationRepository;
         _serviceRepository = serviceRepository;
         _documentRepository = documentRepository;
         _currentUserService = currentUserService;
+        _userRepository = userRepository;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<Result<long>> Handle(SubmitStepCommand request, CancellationToken cancellationToken)
@@ -108,6 +116,38 @@ public sealed class SubmitStepCommandHandler : IRequestHandler<SubmitStepCommand
         _applicationRepository.Update(application);
         await _applicationRepository.SaveChangesAsync(cancellationToken);
 
+        await NotifyAdmins(application.Id, service.Name, step.Name, currentUserId, cancellationToken);
+
         return Result<long>.Success(submission.Id);
+    }
+
+    private async Task NotifyAdmins(long applicationId, string serviceName, string stepName, long applicantId, CancellationToken cancellationToken)
+    {
+        var applicant = await _userRepository.GetByIdAsync(applicantId, cancellationToken);
+        var applicantName = applicant?.Name ?? applicant?.Username ?? "Applicant";
+
+        var admins = await _userRepository.GetAllAsync(cancellationToken);
+        var adminIds = admins
+            .Where(u => u.Role == UserRole.Admin && u.Status == UserStatus.Active)
+            .Select(u => u.Id)
+            .ToList();
+
+        if (!adminIds.Any())
+            return;
+
+        var message = $"{applicantName} submitted step '{stepName}' for {serviceName}.";
+
+        var notifications = adminIds
+            .Select(id => Notification.Create(
+                id,
+                NotificationType.StepSubmitted,
+                applicationId,
+                message,
+                null,
+                applicantId))
+            .ToList();
+
+        await _notificationRepository.AddRangeAsync(notifications, cancellationToken);
+        await _notificationRepository.SaveChangesAsync(cancellationToken);
     }
 }

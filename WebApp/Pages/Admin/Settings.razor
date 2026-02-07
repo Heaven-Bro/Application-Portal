@@ -1,13 +1,238 @@
 @page "/admin/settings"
 @layout AdminLayout
 @attribute [Authorize(Roles = "Admin")]
+@inject HttpClient Http
+@inject IToastService ToastService
 
 <PageTitle>Settings - Admin Panel</PageTitle>
 
 <div class="space-y-6">
     <h1 class="text-2xl font-bold text-gray-900">System Settings</h1>
     
-    <div class="bg-white rounded-lg shadow p-6">
-        <p class="text-gray-600">Settings content coming soon...</p>
+    <div class="bg-white rounded-lg shadow p-6 space-y-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Chairman Availability (Current Week)</h2>
+                <p class="text-sm text-gray-600">@weekRangeLabel</p>
+            </div>
+            <button class="px-4 py-2 bg-gray-900 text-white rounded-lg"
+                    @onclick="LoadSlots">
+                Refresh
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1">Day</label>
+                <select class="w-full px-3 py-2 border rounded-lg text-sm"
+                        @bind="newSlotDate">
+                    @foreach (var day in weekDays)
+                    {
+                        <option value="@day">@day.ToString("ddd, MMM dd")</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1">Start Time</label>
+                <input type="time" class="w-full px-3 py-2 border rounded-lg text-sm"
+                       @bind="newSlotStart" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1">End Time</label>
+                <input type="time" class="w-full px-3 py-2 border rounded-lg text-sm"
+                       @bind="newSlotEnd" />
+            </div>
+            <div class="flex items-end">
+                <button class="w-full px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold"
+                        @onclick="AddSlot">
+                    Add Slot
+                </button>
+            </div>
+        </div>
+
+        <div class="border rounded-lg">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-2 px-4 py-3 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                <div>Date</div>
+                <div>Start</div>
+                <div>End</div>
+                <div class="md:col-span-2">Actions</div>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="px-4 py-6 text-center text-gray-500">Loading slots...</div>
+            }
+            else if (slots.Count == 0)
+            {
+                <div class="px-4 py-6 text-center text-gray-500">No availability slots for this week.</div>
+            }
+            else
+            {
+                @foreach (var slot in slots.OrderBy(s => s.StartTime))
+                {
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-2 px-4 py-3 border-t text-sm text-gray-700">
+                        <div>@slot.StartTime.ToString("ddd, MMM dd")</div>
+                        <div>@slot.StartTime.ToString("hh:mm tt")</div>
+                        <div>@slot.EndTime.ToString("hh:mm tt")</div>
+                        <div class="md:col-span-2">
+                            <button class="text-red-600 hover:text-red-800"
+                                    @onclick="() => RemoveSlot(slot)">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="flex items-center justify-end gap-2">
+            <button class="px-4 py-2 border rounded-lg text-gray-700"
+                    @onclick="ResetSlots"
+                    disabled="@isSaving">
+                Reset
+            </button>
+            <button class="px-4 py-2 bg-gray-900 text-white rounded-lg"
+                    @onclick="SaveSlots"
+                    disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Save Availability")
+            </button>
+        </div>
     </div>
 </div>
+
+@code {
+    private List<ChairmanAvailabilitySlotDto> slots = new();
+    private bool isLoading = true;
+    private bool isSaving;
+    private string weekRangeLabel = string.Empty;
+
+    private List<DateTime> weekDays = new();
+    private DateTime newSlotDate = DateTime.Today;
+    private TimeOnly? newSlotStart = new(9, 0);
+    private TimeOnly? newSlotEnd = new(10, 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildWeekDays();
+        await LoadSlots();
+    }
+
+    private void BuildWeekDays()
+    {
+        var start = DateTime.Today;
+        while (start.DayOfWeek != DayOfWeek.Monday)
+        {
+            start = start.AddDays(-1);
+        }
+
+        weekDays = Enumerable.Range(0, 7)
+            .Select(i => start.AddDays(i))
+            .ToList();
+
+        var end = start.AddDays(6);
+        weekRangeLabel = $"{start:MMM dd, yyyy} - {end:MMM dd, yyyy}";
+
+        if (weekDays.Count > 0)
+        {
+            newSlotDate = weekDays[0];
+        }
+    }
+
+    private async Task LoadSlots()
+    {
+        try
+        {
+            isLoading = true;
+            slots = await Http.GetFromJsonAsync<List<ChairmanAvailabilitySlotDto>>("api/chairman-availability/current-week") ?? new();
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to load availability");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void AddSlot()
+    {
+        if (newSlotStart == null || newSlotEnd == null)
+        {
+            ToastService.ShowError("Invalid time");
+            return;
+        }
+
+        var start = newSlotDate.Date.Add(newSlotStart.Value.ToTimeSpan());
+        var end = newSlotDate.Date.Add(newSlotEnd.Value.ToTimeSpan());
+
+        if (end <= start)
+        {
+            ToastService.ShowError("End time must be after start time");
+            return;
+        }
+
+        if (slots.Any(s => s.StartTime < end && start < s.EndTime))
+        {
+            ToastService.ShowError("Slot overlaps with existing availability");
+            return;
+        }
+
+        slots.Add(new ChairmanAvailabilitySlotDto
+        {
+            StartTime = start,
+            EndTime = end
+        });
+    }
+
+    private void RemoveSlot(ChairmanAvailabilitySlotDto slot)
+    {
+        slots.Remove(slot);
+    }
+
+    private async Task SaveSlots()
+    {
+        if (isSaving) return;
+        isSaving = true;
+
+        try
+        {
+            var payload = new
+            {
+                Slots = slots.Select(s => new { s.StartTime, s.EndTime }).ToList()
+            };
+
+            var response = await Http.PutAsJsonAsync("api/chairman-availability/current-week", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Availability updated");
+                await LoadSlots();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to update availability");
+            }
+        }
+        catch
+        {
+            ToastService.ShowError("Failed to update availability");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ResetSlots()
+    {
+        slots.Clear();
+        await SaveSlots();
+    }
+
+    public class ChairmanAvailabilitySlotDto
+    {
+        public long Id { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+    }
+}
